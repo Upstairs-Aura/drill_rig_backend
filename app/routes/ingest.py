@@ -1,19 +1,27 @@
-from pydantic import BaseModel
-from datetime import datetime
-from typing import List
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import FeatureRecord
+from app.schemas import IngestRequest
 
-class FeaturePayload(BaseModel):
-    asset_id: str
-    sensor_id: str
-    timestamp: datetime
-    rms: float
-    peak: float
-    crest_factor: float
-    kurtosis: float
-    skewness: float
-    dominant_frequency: float
-    temperature: float
-    current: float
+router = APIRouter(prefix="/api/v1/ingest", tags=["Ingest"])
 
-class IngestRequest(BaseModel):
-    records: List[FeaturePayload]
+@router.post("/")
+def ingest_records(payload: IngestRequest, db: Session = Depends(get_db)):
+    for record in payload.records:
+        db_record = FeatureRecord(
+            asset_id=record.asset_id,
+            sensor_id=record.sensor_id,
+            timestamp=record.timestamp,
+            rms=record.rms,
+            peak=record.peak,
+            crest_factor=record.crest_factor,
+            kurtosis=record.kurtosis,
+            skewness=record.skewness,
+            dominant_frequency=record.dominant_frequency,
+            temperature=record.temperature,
+            current=record.current,
+        )
+        db.add(db_record)
+    db.commit()
+    return {"inserted": len(payload.records)}

@@ -1,66 +1,76 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import FeatureRecord, Asset
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-router = APIRouter(prefix="/api/v1/assets", tags=["Dashboard"])
+from datetime import datetime, timedelta
+import random
+from app.database import SessionLocal, engine, Base
+from app.models import Asset, Sensor, FeatureRecord
 
-@router.get("/")
-def get_all_assets(db: Session = Depends(get_db)):
-    return db.query(Asset).all()
+Base.metadata.create_all(bind=engine)
 
-@router.get("/{asset_id}/metrics/latest")
-def get_latest_metrics(asset_id: str, db: Session = Depends(get_db)):
-    record = db.query(FeatureRecord).filter(
-        FeatureRecord.asset_id == asset_id
-    ).order_by(FeatureRecord.timestamp.desc()).first()
-    if not record:
-        return {"temperature": "--", "vibration": "--", "current": "--"}
-    return {
-        "temperature": f"{record.temperature}°C",
-        "vibration": f"{record.rms}mm/s",
-        "current": f"{record.current}A"
-    }
+def seed():
+    db = SessionLocal()
 
-@router.get("/{asset_id}/alerts")
-def get_alerts(asset_id: str, db: Session = Depends(get_db)):
-    record = db.query(FeatureRecord).filter(
-        FeatureRecord.asset_id == asset_id
-    ).order_by(FeatureRecord.timestamp.desc()).first()
-    if not record:
-        return [
-            {"text": "Vibration", "severity": "normal"},
-            {"text": "Temperature", "severity": "normal"},
-            {"text": "Current", "severity": "normal"},
-        ]
-    def severity(value, warn, critical):
-        if value >= critical: return "critical"
-        if value >= warn: return "warning"
-        return "normal"
-    return [
-        {"text": "Vibration", "severity": severity(record.rms, 6.0, 9.0)},
-        {"text": "Temperature", "severity": severity(record.temperature, 70.0, 78.0)},
-        {"text": "Current", "severity": severity(record.current, 400.0, 500.0)},
+    # Clear existing data
+    db.query(FeatureRecord).delete()
+    db.query(Sensor).delete()
+    db.query(Asset).delete()
+    db.commit()
+
+    # 4 gearbox assets
+    assets = [
+        Asset(id="gearbox-a", name="Gearbox A", asset_type="gearbox", drill="Drill A"),
+        Asset(id="gearbox-b", name="Gearbox B", asset_type="gearbox", drill="Drill B"),
+        Asset(id="gearbox-c", name="Gearbox C", asset_type="gearbox", drill="Drill C"),
+        Asset(id="gearbox-d", name="Gearbox D", asset_type="gearbox", drill="Drill D"),
     ]
+    db.add_all(assets)
+    db.commit()
 
-@router.get("/{asset_id}/health-history")
-def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
-    from datetime import datetime, timedelta
-    since = datetime.utcnow() - timedelta(days=days)
-    records = db.query(FeatureRecord).filter(
-        FeatureRecord.asset_id == asset_id,
-        FeatureRecord.timestamp >= since
-    ).order_by(FeatureRecord.timestamp).all()
-    return [{"day": r.timestamp.strftime("%b %d"), "health": round((1 - min(r.rms / 15.0, 1)) * 100, 1)} for r in records]
+    # 1 vibration sensor per gearbox
+    sensors = [
+        Sensor(id=f"sensor-{a.id}", asset_id=a.id, sensor_type="vibration")
+        for a in assets
+    ]
+    db.add_all(sensors)
+    db.commit()
 
-@router.get("/{asset_id}/system-status")
-def get_system_status(asset_id: str, db: Session = Depends(get_db)):
-    record = db.query(FeatureRecord).filter(
-        FeatureRecord.asset_id == asset_id
-    ).order_by(FeatureRecord.timestamp.desc()).first()
-    if not record:
-        return {"lastReading": "No data", "lastTransmission": "No data"}
-    return {
-        "lastReading": record.timestamp.strftime("%H:%M"),
-        "lastTransmission": record.timestamp.strftime("%H:%M")
+    # Sensor profiles matching your mock data health levels
+    profiles = {
+        "gearbox-a": {"rms": (7.0, 9.0),   "temp": (70.0, 74.0), "current": (390.0, 430.0)},
+        "gearbox-b": {"rms": (3.0, 5.5),   "temp": (60.0, 67.0), "current": (300.0, 360.0)},
+        "gearbox-c": {"rms": (9.0, 12.0),  "temp": (76.0, 82.0), "current": (490.0, 560.0)},
+        "gearbox-d": {"rms": (5.5, 7.5),   "temp": (64.0, 70.0), "current": (340.0, 400.0)},
     }
+
+    # 30 days of records, one per day per gearbox
+    records = []
+    for asset in assets:
+        p = profiles[asset.id]
+        for day in range(30):
+            timestamp = datetime.utcnow() - timedelta(days=(30 - day))
+            rms = random.uniform(*p["rms"])
+            records.append(FeatureRecord(
+                asset_id=asset.id,
+                sensor_id=f"sensor-{asset.id}",
+                timestamp=timestamp,
+                rms=rms,
+                peak=rms * random.uniform(2.5, 3.5),
+                crest_factor=random.uniform(2.5, 4.0),
+                kurtosis=random.uniform(3.0, 5.0),
+                skewness=random.uniform(-0.5, 0.5),
+                dominant_frequency=random.uniform(50.0, 120.0),
+                temperature=random.uniform(*p["temp"]),
+                current=random.uniform(*p["current"]),
+            ))
+
+    db.add_all(records)
+    db.commit()
+    db.close()
+    print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records.")
+
+if __name__ == "__main__":
+    seed()
+
+
