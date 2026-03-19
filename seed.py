@@ -18,12 +18,12 @@ def seed():
     db.query(Asset).delete()
     db.commit()
 
-    # 4 gearbox assets
+    # 4 drill assets
     assets = [
-        Asset(id="gearbox-a", name="Gearbox A", asset_type="gearbox", drill="Drill A"),
-        Asset(id="gearbox-b", name="Gearbox B", asset_type="gearbox", drill="Drill B"),
-        Asset(id="gearbox-c", name="Gearbox C", asset_type="gearbox", drill="Drill C"),
-        Asset(id="gearbox-d", name="Gearbox D", asset_type="gearbox", drill="Drill D"),
+        Asset(id="drill-a", name="Gearbox A", asset_type="gearbox", drill="Drill A"),
+        Asset(id="drill-b", name="Gearbox B", asset_type="gearbox", drill="Drill B"),
+        Asset(id="drill-c", name="Gearbox C", asset_type="gearbox", drill="Drill C"),
+        Asset(id="drill-d", name="Gearbox D", asset_type="gearbox", drill="Drill D"),
     ]
     db.add_all(assets)
     db.commit()
@@ -38,10 +38,10 @@ def seed():
 
     # Sensor profiles matching your mock data health levels
     profiles = {
-        "gearbox-a": {"rms": (7.0, 9.0),   "temp": (70.0, 74.0), "current": (390.0, 430.0)},
-        "gearbox-b": {"rms": (3.0, 5.5),   "temp": (60.0, 67.0), "current": (300.0, 360.0)},
-        "gearbox-c": {"rms": (9.0, 12.0),  "temp": (76.0, 82.0), "current": (490.0, 560.0)},
-        "gearbox-d": {"rms": (5.5, 7.5),   "temp": (64.0, 70.0), "current": (340.0, 400.0)},
+        "drill-a": {"rms": (7.0, 9.0),   "temp": (70.0, 74.0), "current": (390.0, 430.0)},
+        "drill-b": {"rms": (3.0, 5.5),   "temp": (60.0, 67.0), "current": (300.0, 360.0)},
+        "drill-c": {"rms": (9.0, 12.0),  "temp": (76.0, 82.0), "current": (490.0, 560.0)},
+        "drill-d": {"rms": (5.5, 7.5),   "temp": (64.0, 70.0), "current": (340.0, 400.0)},
     }
 
     # 30 days of records, one per day per gearbox
