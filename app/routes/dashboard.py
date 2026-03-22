@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import FeatureRecord, Asset
+from app.models import FeatureRecord, Asset, PredictionRecord
+from datetime import datetime
+from app.ml.predict import predict as run_predict
+
 
 router = APIRouter(prefix="/api/v1/assets", tags=["Dashboard"])
 
@@ -64,3 +67,30 @@ def get_system_status(asset_id: str, db: Session = Depends(get_db)):
         "lastReading": record.timestamp.strftime("%H:%M"),
         "lastTransmission": record.timestamp.strftime("%H:%M")
     }
+
+@router.get("/{asset_id}/predict")
+def get_prediction(asset_id: str, db: Session = Depends(get_db)):
+    # Get the most recent feature record for this asset
+    record = db.query(FeatureRecord).filter(
+        FeatureRecord.asset_id == asset_id
+    ).order_by(FeatureRecord.timestamp.desc()).first()
+
+    if not record:
+        return {"anomaly": False, "risk_score": 0.0, "source": "no_data"}
+
+    result = run_predict(record)
+
+    if result is None:
+        return {"anomaly": False, "risk_score": 0.0, "source": "no_model"}
+
+    # Log prediction to DB for audit trail
+    db.add(PredictionRecord(
+        asset_id     = asset_id,
+        timestamp    = datetime.utcnow(),
+        model_source = result["source"],
+        anomaly      = int(result["anomaly"]),
+        risk_score   = result["risk_score"]
+    ))
+    db.commit()
+
+    return result
