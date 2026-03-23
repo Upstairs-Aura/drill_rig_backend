@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from app.database import SessionLocal
 from app.models import FeatureRecord
-from ml.features import records_to_dataframe
+from app.ml.features import records_to_dataframe
 
 def train():
     db = SessionLocal()
@@ -31,9 +31,9 @@ def train():
     ])
     pipeline.fit(df)
 
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(pipeline, "models/isolation_forest.pkl")
-    print("Saved → models/isolation_forest.pkl")
+    os.makedirs("app/models", exist_ok=True)
+    joblib.dump(pipeline, "app/models/isolation_forest.pkl")
+    print("Saved → app/models/isolation_forest.pkl")
 
 if __name__ == "__main__":
     train()

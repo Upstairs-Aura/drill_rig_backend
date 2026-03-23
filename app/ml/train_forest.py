@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from app.database import SessionLocal
 from app.models import FeatureRecord, MaintenanceEvent
-from ml.features import records_to_dataframe, FEATURE_COLUMNS
+from app.ml.features import records_to_dataframe, FEATURE_COLUMNS
 from datetime import timedelta
 
 def train():
@@ -62,11 +62,11 @@ def train():
     pipeline.fit(X_train, y_train)
     print(classification_report(y_test, pipeline.predict(X_test)))
 
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(pipeline, "models/random_forest.pkl")
-    print("Saved → models/random_forest.pkl")
+    os.makedirs("app/models", exist_ok=True)
+    joblib.dump(pipeline, "app/models/random_forest.pkl")
+    print("Saved → app/models/random_forest.pkl")
     print("Deploy to Pi:")
-    print("  scp models/random_forest.pkl pi@<pi-ip>:~/drill_rig_backend-Third/models/")
+    print("  scp app/models/random_forest.pkl pi@<pi-ip>:~/drill_rig_backend-Third/models/")
 
 if __name__ == "__main__":
     train()

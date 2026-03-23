@@ -1,17 +1,17 @@
 import os, joblib
 import numpy as np
-from ml.features import record_to_features
+from app.ml.features import record_to_features
 
 _iso_model = None
 _rf_model  = None
 
 def _load():
     global _iso_model, _rf_model
-    if os.path.exists("models/isolation_forest.pkl"):
-        _iso_model = joblib.load("models/isolation_forest.pkl")
+    if os.path.exists("app/models/isolation_forest.pkl"):
+        _iso_model = joblib.load("app/models/isolation_forest.pkl")
         print("Loaded: isolation_forest.pkl")
-    if os.path.exists("models/random_forest.pkl"):
-        _rf_model = joblib.load("models/random_forest.pkl")
+    if os.path.exists("app/models/random_forest.pkl"):
+        _rf_model = joblib.load("app/models/random_forest.pkl")
         print("Loaded: random_forest.pkl")
 
 _load()
