@@ -94,3 +94,17 @@ def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return result
+
+@router.get("/{asset_id}/prediction-history")
+def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
+    records = (
+        db.query(PredictionRecord)
+        .filter(PredictionRecord.asset_id == asset_id)
+        .order_by(PredictionRecord.timestamp.desc())
+        .limit(30)
+        .all()
+    )
+    return [
+        {"timestamp": r.timestamp.strftime("%b %d %H:%M"), "risk_score": round(r.risk_score * 100, 1)}
+        for r in reversed(records)
+    ]
