@@ -8,9 +8,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Drill Rig Predictive Maintenance API")
 
+# Middleware for cors (connections)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", os.getenv("FRONTEND_URL", "")],
+    allow_origins=[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
