@@ -17,3 +17,7 @@ pandas
 numpy
 
 joblib
+
+tensorflow
+
+keras
