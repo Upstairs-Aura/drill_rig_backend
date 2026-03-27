@@ -1,8 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from app.database import Base
 from datetime import datetime
-
-Base = declarative_base()
 
 class Asset(Base):
     __tablename__ = "assets"
@@ -39,3 +37,12 @@ class MaintenanceEvent(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     event_type = Column(String)
     notes = Column(String)
+
+class PredictionRecord(Base):
+    __tablename__ = "prediction_records"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    asset_id    = Column(String, ForeignKey("assets.id"))
+    timestamp   = Column(DateTime, default=datetime.utcnow)
+    model_source = Column(String)    # "isolation_forest" or "random_forest"
+    anomaly     = Column(Integer)    # 1 = anomaly, 0 = normal
+    risk_score  = Column(Float)      # 0.0 – 1.0
