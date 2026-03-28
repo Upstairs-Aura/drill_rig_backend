@@ -102,7 +102,7 @@ def seed():
     db.add_all(records)
     db.commit()
     db.close()
-    print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records., {len(events)} maintenance events.")
+    print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records, {len(events)} maintenance events.")
 
 if __name__ == "__main__":
     seed()
