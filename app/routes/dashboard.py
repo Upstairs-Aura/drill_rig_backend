@@ -70,29 +70,28 @@ def get_system_status(asset_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{asset_id}/predict")
 def get_prediction(asset_id: str, db: Session = Depends(get_db)):
-    # Get the most recent feature record for this asset
-    record = db.query(FeatureRecord).filter(
+    recent = db.query(FeatureRecord).filter(
         FeatureRecord.asset_id == asset_id
-    ).order_by(FeatureRecord.timestamp.desc()).first()
+    ).order_by(FeatureRecord.timestamp.desc()).limit(7).all()
+    recent = list(reversed(recent))  # oldest first
 
-    if not record:
+    if not recent:
         return {"anomaly": False, "risk_score": 0.0, "source": "no_data"}
 
-    result = run_predict(record)
+    latest = recent[-1]
+    result = run_predict(latest, recent_records=recent)
 
     if result is None:
         return {"anomaly": False, "risk_score": 0.0, "source": "no_model"}
 
-    # Log prediction to DB for audit trail
     db.add(PredictionRecord(
         asset_id     = asset_id,
         timestamp    = datetime.utcnow(),
         model_source = result["source"],
         anomaly      = int(result["anomaly"]),
-        risk_score   = result["risk_score"]
+        risk_score   = result["risk_score"],
     ))
     db.commit()
-
     return result
 
 @router.get("/{asset_id}/prediction-history")
