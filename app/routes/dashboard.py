@@ -94,6 +94,63 @@ def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     db.commit()
     return result
 
+@router.get("/{asset_id}/recommendations")
+def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
+    record = db.query(FeatureRecord).filter(
+        FeatureRecord.asset_id == asset_id
+    ).order_by(FeatureRecord.timestamp.desc()).first()
+
+    if not record:
+        return {"nextMaintenance": "--", "issues": []}
+
+    pred = db.query(PredictionRecord).filter(
+        PredictionRecord.asset_id == asset_id
+    ).order_by(PredictionRecord.timestamp.desc()).first()
+
+    risk = pred.risk_score if pred else 0.0
+
+    if risk >= 0.7:
+        next_maint = "3–7 days"
+    elif risk >= 0.4:
+        next_maint = "14–21 days"
+    else:
+        next_maint = "30–45 days"
+
+    issues = []
+    if record.rms >= 9.0:
+        issues.append({"title": "Critical: Immediate inspection required",
+                       "description": f"Vibration RMS {record.rms:.2f}mm/s exceeds critical threshold (9.0mm/s)",
+                       "buttonText": "Alert", "buttonClass": "alert"})
+    elif record.rms >= 6.0:
+        issues.append({"title": "Warning: Elevated vibration detected",
+                       "description": f"Vibration RMS {record.rms:.2f}mm/s exceeds warning threshold (6.0mm/s)",
+                       "buttonText": "Monitor", "buttonClass": "alert"})
+
+    if record.temperature >= 78.0:
+        issues.append({"title": "Critical: Gearbox overheating",
+                       "description": f"Temperature {record.temperature:.1f}°C exceeds critical limit (78°C)",
+                       "buttonText": "Alert", "buttonClass": "alert"})
+    elif record.temperature >= 70.0:
+        issues.append({"title": "Warning: Temperature elevated",
+                       "description": f"Temperature {record.temperature:.1f}°C above normal operating range",
+                       "buttonText": "Review", "buttonClass": "review"})
+
+    if record.current >= 500.0:
+        issues.append({"title": "Critical: Current overload",
+                       "description": f"Motor current {record.current:.1f}A exceeds protection threshold (500A)",
+                       "buttonText": "Alert", "buttonClass": "alert"})
+    elif record.current >= 400.0:
+        issues.append({"title": "Warning: High current draw",
+                       "description": f"Motor current {record.current:.1f}A approaching overload limit",
+                       "buttonText": "Review", "buttonClass": "review"})
+
+    if not issues:
+        issues.append({"title": "Info: All parameters within normal range",
+                       "description": "No anomalies detected in latest sensor readings",
+                       "buttonText": "View", "buttonClass": "review"})
+
+    return {"nextMaintenance": next_maint, "issues": issues}
+
 @router.get("/{asset_id}/prediction-history")
 def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
     records = (
