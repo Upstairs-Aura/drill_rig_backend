@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from datetime import datetime, timedelta
 import random
 from app.database import SessionLocal, engine, Base
-from app.models import Asset, Sensor, FeatureRecord
+from app.models import Asset, Sensor, FeatureRecord, MaintenanceEvent, PredictionRecord
 
 Base.metadata.create_all(bind=engine)
 
@@ -14,6 +14,8 @@ def seed():
 
     # Clear existing data
     db.query(FeatureRecord).delete()
+    db.query(MaintenanceEvent).delete()
+    db.query(PredictionRecord).delete()
     db.query(Sensor).delete()
     db.query(Asset).delete()
     db.commit()
@@ -65,10 +67,42 @@ def seed():
                 current=random.uniform(*p["current"]),
             ))
 
+    events = [
+        MaintenanceEvent(
+            asset_id="drill-a",
+            timestamp=datetime.utcnow() - timedelta(days=20),
+            event_type="bearing_failure",
+            notes="Seeded: elevated vibration led to bearing replacement"
+        ),
+        MaintenanceEvent(
+            asset_id="drill-a",
+            timestamp=datetime.utcnow() - timedelta(days=7),
+            event_type="gear_wear",
+            notes="Seeded: gear tooth wear detected on inspection"
+        ),
+        MaintenanceEvent(
+            asset_id="drill-c",
+            timestamp=datetime.utcnow() - timedelta(days=25),
+            event_type="bearing_failure",
+            notes="Seeded: outer race bearing failure"
+        ),
+        MaintenanceEvent(
+            asset_id="drill-c",
+            timestamp=datetime.utcnow() - timedelta(days=14),
+            event_type="overload",
+            notes="Seeded: current overload tripped protection relay"
+        ),
+        MaintenanceEvent(
+            asset_id="drill-c",
+            timestamp=datetime.utcnow() - timedelta(days=3),
+            event_type="gear_wear",
+            notes="Seeded: gear mesh frequency amplitude exceeded threshold"
+        ),
+    ]
     db.add_all(records)
     db.commit()
     db.close()
-    print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records.")
+    print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records., {len(events)} maintenance events.")
 
 if __name__ == "__main__":
     seed()
