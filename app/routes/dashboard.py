@@ -47,11 +47,33 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     ).order_by(FeatureRecord.timestamp.desc()).first()
     if not record:
         return [
-            {"text": "Vibration", "severity": "..."},
-            {"text": "Temperature", "severity": "..."},
-            {"text": "Current", "severity": "..."},
+            {"text": "Vibration",    "severity": "normal"},
+            {"text": "Temperature",  "severity": "normal"},
+            {"text": "Current",      "severity": "normal"},
         ]
-    thresholds = get_thresholds(asset_id, db) #get threshold from config
+    t_hold = get_thresholds(asset_id, db)
+
+    def classify(value, warn, critical):
+        if value >= critical:
+            return "critical"
+        if value >= warn:
+            return "warning"
+        return "normal"
+
+    return [
+        {
+            "text": "Vibration",
+            "severity": classify(record.rms, t_hold["vibration_warn_mms"], t_hold["vibration_critical_mms"])
+        },
+        {
+            "text": "Temperature",
+            "severity": classify(record.temperature, t_hold["temperature_warn_c"], t_hold["temperature_critical_c"])
+        },
+        {
+            "text": "Current",
+            "severity": classify(record.current, t_hold["current_warn_a"], t_hold["current_critical_a"])
+        },
+    ]
 
 @router.get("/{asset_id}/health-history")
 def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
@@ -61,7 +83,15 @@ def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_
         FeatureRecord.asset_id == asset_id,
         FeatureRecord.timestamp >= since
     ).order_by(FeatureRecord.timestamp).all()
-    return [{"day": r.timestamp.strftime("%b %d"), "health": round((1 - min(r.rms / 15.0, 1)) * 100, 1)} for r in records]
+    t_hold = get_thresholds(asset_id, db)
+    critical_rms = t_hold["vibration_critical_mms"]
+    return [
+        {
+            "day": r.timestamp.strftime("%b %d"),
+            "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
+        }
+        for r in records
+    ]
 
 @router.get("/{asset_id}/system-status")
 def get_system_status(asset_id: str, db: Session = Depends(get_db)):
@@ -110,7 +140,77 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
     if not record:
         return {"nextMaintenance": "--", "issues": []}
 
-    thresholds = get_thresholds(asset_id, db) #get thresholds from config
+    t_hold = get_thresholds(asset_id, db)
+    issues = []
+
+    # Vibration checks
+    if record.rms >= t_hold["vibration_critical_mms"]:
+        issues.append({
+            "title": "Critical: Schedule immediate inspection",
+            "description": f"Vibration at {round(record.rms, 1)} mm/s exceeds critical limit of {t_hold['vibration_critical_mms']} mm/s.",
+            "buttonText": "Alert",
+            "buttonClass": "alert"
+        })
+    elif record.rms >= t_hold["vibration_warn_mms"]:
+        issues.append({
+            "title": "Warning: Vibration elevated",
+            "description": f"Vibration at {round(record.rms, 1)} mm/s exceeds warning limit of {t_hold['vibration_warn_mms']} mm/s.",
+            "buttonText": "Monitor",
+            "buttonClass": "alert"
+        })
+
+    # Temperature checks
+    if record.temperature >= t_hold["temperature_critical_c"]:
+        issues.append({
+            "title": "Critical: Overheating detected",
+            "description": f"Temperature at {round(record.temperature, 1)}°C exceeds critical limit of {t_hold['temperature_critical_c']}°C.",
+            "buttonText": "Alert",
+            "buttonClass": "alert"
+        })
+    elif record.temperature >= t_hold["temperature_warn_c"]:
+        issues.append({
+            "title": "Warning: Temperature elevated",
+            "description": f"Temperature at {round(record.temperature, 1)}°C exceeds warning limit of {t_hold['temperature_warn_c']}°C.",
+            "buttonText": "Monitor",
+            "buttonClass": "alert"
+        })
+
+    # Current checks
+    if record.current >= t_hold["current_critical_a"]:
+        issues.append({
+            "title": "Critical: Current overload",
+            "description": f"Current at {round(record.current, 1)} A exceeds critical limit of {t_hold['current_critical_a']} A.",
+            "buttonText": "Alert",
+            "buttonClass": "alert"
+        })
+    elif record.current >= t_hold["current_warn_a"]:
+        issues.append({
+            "title": "Warning: Current elevated",
+            "description": f"Current at {round(record.current, 1)} A exceeds warning limit of {t_hold['current_warn_a']} A.",
+            "buttonText": "Monitor",
+            "buttonClass": "alert"
+        })
+
+    if not issues:
+        issues.append({
+            "title": "All systems nominal",
+            "description": "No threshold violations detected. Next routine inspection as scheduled.",
+            "buttonText": "Review",
+            "buttonClass": "review"
+        })
+
+    # nextMaintenance: scale urgency by how close rms is to the critical threshold
+    ratio = record.rms / t_hold["vibration_critical_mms"]
+    if ratio >= 1.0:
+        next_maintenance = "Immediate"
+    elif ratio >= 0.85:
+        next_maintenance = "3–7 days"
+    elif ratio >= 0.65:
+        next_maintenance = "14 days"
+    else:
+        next_maintenance = "30+ days"
+
+    return {"nextMaintenance": next_maintenance, "issues": issues}
 
 @router.get("/{asset_id}/prediction-history")
 def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
