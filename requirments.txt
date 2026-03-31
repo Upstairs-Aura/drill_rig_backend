@@ -21,3 +21,5 @@ joblib
 tensorflow
 
 keras
+
+scipy
