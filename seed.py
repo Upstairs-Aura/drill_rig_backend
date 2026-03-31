@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from datetime import datetime, timedelta
 import random
 from app.database import SessionLocal, engine, Base
-from app.models import Asset, Sensor, FeatureRecord, MaintenanceEvent, PredictionRecord
+from app.models import Asset, Sensor, FeatureRecord, MaintenanceEvent, PredictionRecord, AssetConfig
 
 Base.metadata.create_all(bind=engine)
 
@@ -110,5 +110,21 @@ def seed():
 
 if __name__ == "__main__":
     seed()
+
+def seed_configs(db, assets):
+    db.query(AssetConfig).delete()
+    default_config = {
+        "sensors": [{"sensor_id": f"sensor-{a.id}", "sensor_type": "vibration"} for a in assets],
+        "sampling": {"sampling_rate_hz": 1600.0, "burst_duration_s": 1.0, "samples_per_burst": 1600},
+        "filter":   {"filter_order": 4, "lowcut_hz": 10.0, "highcut_hz": 500.0, "window_length": 512},
+        "thresholds": {
+            "vibration_warn_mms": 6.0,    "vibration_critical_mms": 9.0,
+            "temperature_warn_c": 70.0,   "temperature_critical_c": 78.0,
+            "current_warn_a":     400.0,  "current_critical_a":     500.0,
+        }
+    }
+    for asset in assets:
+        db.add(AssetConfig(asset_id=asset.id, version=1, is_active=True, config=default_config))
+    db.commit()
 
 
