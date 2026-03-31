@@ -2,11 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from app.database import engine, Base
-from app.routes import dashboard, ingest
+from app.routes import dashboard, ingest, config
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Drill Rig Predictive Maintenance API")
+app.include_router(config.router)
 
 # Middleware for cors (connections)
 app.add_middleware(

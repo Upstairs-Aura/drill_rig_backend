@@ -1,12 +1,27 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import FeatureRecord, Asset, PredictionRecord
+from app.models import FeatureRecord, Asset, PredictionRecord, AssetConfig
 from datetime import datetime
 from app.ml.predict import predict as run_predict
 
 
 router = APIRouter(prefix="/api/v1/assets", tags=["Dashboard"])
+
+#Helper for getting configured threshold values
+def get_thresholds(asset_id: str, db: Session) -> dict:
+    cfg = db.query(AssetConfig).filter(
+        AssetConfig.asset_id == asset_id,
+        AssetConfig.is_active == True
+    ).first()
+    if cfg:
+        return cfg.config["thresholds"]
+    # Fallback to hardcoded defaults if no config exists yet
+    return {
+        "vibration_warn_mms": 6.0,    "vibration_critical_mms": 9.0,
+        "temperature_warn_c": 70.0,   "temperature_critical_c": 78.0,
+        "current_warn_a":     400.0,  "current_critical_a":     500.0,
+    }
 
 @router.get("/")
 def get_all_assets(db: Session = Depends(get_db)):
@@ -32,19 +47,11 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     ).order_by(FeatureRecord.timestamp.desc()).first()
     if not record:
         return [
-            {"text": "Vibration", "severity": "normal"},
-            {"text": "Temperature", "severity": "normal"},
-            {"text": "Current", "severity": "normal"},
+            {"text": "Vibration", "severity": "..."},
+            {"text": "Temperature", "severity": "..."},
+            {"text": "Current", "severity": "..."},
         ]
-    def severity(value, warn, critical):
-        if value >= critical: return "critical"
-        if value >= warn: return "warning"
-        return "normal"
-    return [
-        {"text": "Vibration", "severity": severity(record.rms, 6.0, 9.0)},
-        {"text": "Temperature", "severity": severity(record.temperature, 70.0, 78.0)},
-        {"text": "Current", "severity": severity(record.current, 400.0, 500.0)},
-    ]
+    thresholds = get_thresholds(asset_id, db) #get threshold from config
 
 @router.get("/{asset_id}/health-history")
 def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
@@ -103,53 +110,7 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
     if not record:
         return {"nextMaintenance": "--", "issues": []}
 
-    pred = db.query(PredictionRecord).filter(
-        PredictionRecord.asset_id == asset_id
-    ).order_by(PredictionRecord.timestamp.desc()).first()
-
-    risk = pred.risk_score if pred else 0.0
-
-    if risk >= 0.7:
-        next_maint = "3–7 days"
-    elif risk >= 0.4:
-        next_maint = "14–21 days"
-    else:
-        next_maint = "30–45 days"
-
-    issues = []
-    if record.rms >= 9.0:
-        issues.append({"title": "Critical: Immediate inspection required",
-                       "description": f"Vibration RMS {record.rms:.2f}mm/s exceeds critical threshold (9.0mm/s)",
-                       "buttonText": "Alert", "buttonClass": "alert"})
-    elif record.rms >= 6.0:
-        issues.append({"title": "Warning: Elevated vibration detected",
-                       "description": f"Vibration RMS {record.rms:.2f}mm/s exceeds warning threshold (6.0mm/s)",
-                       "buttonText": "Monitor", "buttonClass": "alert"})
-
-    if record.temperature >= 78.0:
-        issues.append({"title": "Critical: Gearbox overheating",
-                       "description": f"Temperature {record.temperature:.1f}°C exceeds critical limit (78°C)",
-                       "buttonText": "Alert", "buttonClass": "alert"})
-    elif record.temperature >= 70.0:
-        issues.append({"title": "Warning: Temperature elevated",
-                       "description": f"Temperature {record.temperature:.1f}°C above normal operating range",
-                       "buttonText": "Review", "buttonClass": "review"})
-
-    if record.current >= 500.0:
-        issues.append({"title": "Critical: Current overload",
-                       "description": f"Motor current {record.current:.1f}A exceeds protection threshold (500A)",
-                       "buttonText": "Alert", "buttonClass": "alert"})
-    elif record.current >= 400.0:
-        issues.append({"title": "Warning: High current draw",
-                       "description": f"Motor current {record.current:.1f}A approaching overload limit",
-                       "buttonText": "Review", "buttonClass": "review"})
-
-    if not issues:
-        issues.append({"title": "Info: All parameters within normal range",
-                       "description": "No anomalies detected in latest sensor readings",
-                       "buttonText": "View", "buttonClass": "review"})
-
-    return {"nextMaintenance": next_maint, "issues": issues}
+    thresholds = get_thresholds(asset_id, db) #get thresholds from config
 
 @router.get("/{asset_id}/prediction-history")
 def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
