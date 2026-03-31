@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
 from app.database import Base
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import JSONB
 
 class Asset(Base):
     __tablename__ = "assets"
@@ -46,3 +47,13 @@ class PredictionRecord(Base):
     model_source = Column(String)    # "isolation_forest" or "random_forest"
     anomaly     = Column(Integer)    # 1 = anomaly, 0 = normal
     risk_score  = Column(Float)      # 0.0 – 1.0
+
+    # Configuration
+class AssetConfig(Base):
+    __tablename__ = "asset_configs"
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    asset_id   = Column(String, ForeignKey("assets.id"), nullable=False)
+    version    = Column(Integer, nullable=False, default=1)
+    is_active  = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    config     = Column(JSONB, nullable=False)
