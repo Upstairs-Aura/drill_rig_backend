@@ -105,6 +105,8 @@ def seed():
     db.add_all(events)
     db.commit()
 
+
+    seed_configs(db, assets)
     db.close()
     print(f"Seeded {len(assets)} assets, {len(sensors)} sensors, {len(records)} feature records, {len(events)} maintenance events.")
 
