@@ -6,8 +6,45 @@ from datetime import datetime, timedelta
 import random
 from app.database import SessionLocal, engine, Base
 from app.models import Asset, Sensor, FeatureRecord, MaintenanceEvent, PredictionRecord, AssetConfig
+from app.config.constants import (
+    ASSETS as ASSET_CONFIGS, SEED_PROFILES,
+    SAMPLING_RATE_HZ, BURST_DURATION_S, SAMPLES_PER_BURST,
+    FILTER_ORDER, LOWCUT_HZ, HIGHCUT_HZ, WINDOW_LENGTH,
+    VIBRATION_WARN_MMS, VIBRATION_CRITICAL_MMS,
+    TEMPERATURE_WARN_C, TEMPERATURE_CRITICAL_C,
+    CURRENT_WARN_A, CURRENT_CRITICAL_A,
+)
 
 Base.metadata.create_all(bind=engine)
+
+def seed_configs(db, assets):
+    db.query(AssetConfig).delete()
+    for asset in assets:
+        asset_cfg = next(a for a in ASSET_CONFIGS if a["asset_id"] == asset.id)
+        default_config = {
+            "sensors": [{"sensor_id": asset_cfg["sensor_id"], "sensor_type": asset_cfg["sensor_type"]}],
+            "sampling": {
+                "sampling_rate_hz":  SAMPLING_RATE_HZ,
+                "burst_duration_s":  BURST_DURATION_S,
+                "samples_per_burst": SAMPLES_PER_BURST,
+            },
+            "filter": {
+                "filter_order":  FILTER_ORDER,
+                "lowcut_hz":     LOWCUT_HZ,
+                "highcut_hz":    HIGHCUT_HZ,
+                "window_length": WINDOW_LENGTH,
+            },
+            "thresholds": {
+                "vibration_warn_mms":     VIBRATION_WARN_MMS,
+                "vibration_critical_mms": VIBRATION_CRITICAL_MMS,
+                "temperature_warn_c":     TEMPERATURE_WARN_C,
+                "temperature_critical_c": TEMPERATURE_CRITICAL_C,
+                "current_warn_a":         CURRENT_WARN_A,
+                "current_critical_a":     CURRENT_CRITICAL_A,
+            },
+        }
+        db.add(AssetConfig(asset_id=asset.id, version=1, is_active=True, config=default_config))
+    db.commit()
 
 def seed():
     db = SessionLocal()
@@ -16,35 +53,29 @@ def seed():
     db.query(FeatureRecord).delete()
     db.query(MaintenanceEvent).delete()
     db.query(PredictionRecord).delete()
+    db.query(AssetConfig).delete()
     db.query(Sensor).delete()
     db.query(Asset).delete()
     db.commit()
 
     # 4 drill assets
     assets = [
-        Asset(id="drill-a", name="Gearbox A", asset_type="gearbox", drill="Drill A"),
-        Asset(id="drill-b", name="Gearbox B", asset_type="gearbox", drill="Drill B"),
-        Asset(id="drill-c", name="Gearbox C", asset_type="gearbox", drill="Drill C"),
-        Asset(id="drill-d", name="Gearbox D", asset_type="gearbox", drill="Drill D"),
+    Asset(id=a["asset_id"], name=a["name"], asset_type="gearbox", drill=a["drill"])
+    for a in ASSET_CONFIGS
     ]
     db.add_all(assets)
     db.commit()
 
     # 1 vibration sensor per gearbox
     sensors = [
-        Sensor(id=f"sensor-{a.id}", asset_id=a.id, sensor_type="vibration")
-        for a in assets
+    Sensor(id=a["sensor_id"], asset_id=a["asset_id"], sensor_type=a["sensor_type"])
+    for a in ASSET_CONFIGS
     ]
     db.add_all(sensors)
     db.commit()
 
     # Sensor profiles matching your mock data health levels
-    profiles = {
-        "drill-a": {"rms": (7.0, 9.0),   "temp": (70.0, 74.0), "current": (390.0, 430.0)},
-        "drill-b": {"rms": (3.0, 5.5),   "temp": (60.0, 67.0), "current": (300.0, 360.0)},
-        "drill-c": {"rms": (9.0, 12.0),  "temp": (76.0, 82.0), "current": (490.0, 560.0)},
-        "drill-d": {"rms": (5.5, 7.5),   "temp": (64.0, 70.0), "current": (340.0, 400.0)},
-    }
+    profiles = SEED_PROFILES
 
     # 30 days of records, one per day per gearbox
     records = []
@@ -113,20 +144,6 @@ def seed():
 if __name__ == "__main__":
     seed()
 
-def seed_configs(db, assets):
-    db.query(AssetConfig).delete()
-    default_config = {
-        "sensors": [{"sensor_id": f"sensor-{a.id}", "sensor_type": "vibration"} for a in assets],
-        "sampling": {"sampling_rate_hz": 1600.0, "burst_duration_s": 1.0, "samples_per_burst": 1600},
-        "filter":   {"filter_order": 4, "lowcut_hz": 10.0, "highcut_hz": 500.0, "window_length": 512},
-        "thresholds": {
-            "vibration_warn_mms": 6.0,    "vibration_critical_mms": 9.0,
-            "temperature_warn_c": 70.0,   "temperature_critical_c": 78.0,
-            "current_warn_a":     400.0,  "current_critical_a":     500.0,
-        }
-    }
-    for asset in assets:
-        db.add(AssetConfig(asset_id=asset.id, version=1, is_active=True, config=default_config))
-    db.commit()
+
 
 
