@@ -32,14 +32,41 @@ def get_latest_metrics(asset_id: str, db: Session = Depends(get_db)):
     record = db.query(FeatureRecord).filter(
         FeatureRecord.asset_id == asset_id
     ).order_by(FeatureRecord.timestamp.desc()).first()
-    if not record:
-        return {"temperature": "--", "vibration": "--", "current": "--"}
-    return {
-        "temperature": f"{record.temperature}°C",
-        "vibration": f"{record.rms}mm/s",
-        "current": f"{record.current}A"
-    }
 
+    cfg = db.query(AssetConfig).filter(
+        AssetConfig.asset_id == asset_id,
+        AssetConfig.is_active == True
+    ).first()
+    sensor_types = (
+        [s["sensor_type"] for s in cfg.config["sensors"]]
+        if cfg else ["vibration"]
+    )
+
+    if not record:
+        return {
+            "sensor_types": sensor_types,
+            "vibration": None, "temperature": None, "current": None,
+            "dominant_frequency": None, "bpfo_ratio": None, "bpfi_ratio": None,
+            "rms": None, "peak": None, "crest_factor": None,
+            "kurtosis": None, "skewness": None,
+            "timestamp": None,
+        }
+
+    return {
+        "sensor_types":       sensor_types,
+        "vibration":          round(record.rms, 3),
+        "temperature":        round(record.temperature, 1),
+        "current":            round(record.current, 1),
+        "dominant_frequency": round(record.dominant_frequency, 1),
+        "bpfo_ratio":         round(getattr(record, 'bpfo_ratio', 0.0) or 0.0, 4),
+        "bpfi_ratio":         round(getattr(record, 'bpfi_ratio', 0.0) or 0.0, 4),
+        "rms":                round(record.rms, 3),
+        "peak":               round(record.peak, 3),
+        "crest_factor":       round(record.crest_factor, 3),
+        "kurtosis":           round(record.kurtosis, 3),
+        "skewness":           round(record.skewness, 3),
+        "timestamp":          record.timestamp.isoformat(),
+    }
 @router.get("/{asset_id}/alerts")
 def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     record = db.query(FeatureRecord).filter(
