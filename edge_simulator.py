@@ -53,6 +53,9 @@ def apply_butterworth_filter(signal: np.ndarray) -> np.ndarray:
     return filtfilt(b, a, signal)
 
 
+BPFO_HZ = 105.0   # Bearing pass frequency outer race (matches signal generation)
+BPFI_HZ = 155.0   # Bearing pass frequency inner race (estimated)
+
 def extract_features(filtered: np.ndarray) -> dict:
     """Compute time-domain and frequency-domain features from filtered signal."""
     # Time-domain
@@ -60,21 +63,32 @@ def extract_features(filtered: np.ndarray) -> dict:
     peak         = float(np.max(np.abs(filtered)))
     crest_factor = float(peak / rms) if rms > 0 else 0.0
     kurt         = float(kurtosis(filtered, fisher=False))   # Pearson kurtosis
-    skewness     = float(skew(filtered))
+    skewness_val = float(skew(filtered))
 
     # Frequency-domain: FFT on first window
-    window   = filtered[:WINDOW_LENGTH] * np.hanning(WINDOW_LENGTH)
-    spectrum = np.abs(np.fft.rfft(window))
-    freqs    = np.fft.rfftfreq(WINDOW_LENGTH, d=1.0 / SAMPLING_RATE_HZ)
+    window_samples = filtered[:WINDOW_LENGTH] * np.hanning(WINDOW_LENGTH)
+    spectrum       = np.abs(np.fft.rfft(window_samples))
+    freqs          = np.fft.rfftfreq(WINDOW_LENGTH, d=1.0 / SAMPLING_RATE_HZ)
     dominant_frequency = float(freqs[np.argmax(spectrum)])
+
+    # BPFO / BPFI ratio: amplitude at fault frequency relative to RMS
+    # Finds the spectrum bin closest to the target frequency
+    def freq_amplitude_ratio(target_hz: float) -> float:
+        idx = int(np.argmin(np.abs(freqs - target_hz)))
+        return float(spectrum[idx] / (rms * WINDOW_LENGTH + 1e-9))
+
+    bpfo_ratio = freq_amplitude_ratio(BPFO_HZ)
+    bpfi_ratio = freq_amplitude_ratio(BPFI_HZ)
 
     return {
         "rms":                rms,
         "peak":               peak,
         "crest_factor":       crest_factor,
         "kurtosis":           kurt,
-        "skewness":           skewness,
+        "skewness":           skewness_val,
         "dominant_frequency": dominant_frequency,
+        "bpfo_ratio":         bpfo_ratio,
+        "bpfi_ratio":         bpfi_ratio,
     }
 
 
@@ -94,7 +108,10 @@ def simulate_asset(asset: dict) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **features,
         "temperature": temperature,
-        "current":     current,
+        "current": current,
+        "config_version":  asset.get("config_version", 0),
+        "sampling_rate_hz": SAMPLING_RATE_HZ,
+        "window_length":   WINDOW_LENGTH,
     }
 
 
@@ -105,7 +122,8 @@ def run():
     for r in records:
         print(
             f"  {r['asset_id']:10s}  rms={r['rms']:.3f}  "
-            f"kurtosis={r['kurtosis']:.2f}  dom_freq={r['dominant_frequency']:.1f} Hz  "
+            f"kurtosis={r['kurtosis']:.2f} dom_freq={r['dominant_frequency']:.1f}Hz  "
+            f"bpfo={r['bpfo_ratio']:.4f} bpfi={r['bpfi_ratio']:.4f}  "
             f"temp={r['temperature']}°C  current={r['current']}A"
         )
 
