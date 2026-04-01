@@ -15,7 +15,8 @@ from app.models import FeatureRecord, MaintenanceEvent
 from app.ml.features import FEATURE_COLUMNS
 from datetime import timedelta
 
-SEQUENCE_LENGTH = 7  # 7 consecutive daily readings = one week of history
+SEQUENCE_LENGTH = 24 # 24 snapshots × 10 min ≈ 4 hours of history
+#old 7 consecutive daily readings = one week of history
 
 def build_sequences(df, labels, seq_len):
     X, y = [], []
@@ -47,7 +48,7 @@ def train():
     # Label: 1 if a failure occurred within 7 days after this reading
     for ts in timestamps:
         upcoming = [e for e in event_times
-                    if timedelta(0) <= (e - ts) <= timedelta(days=7)]
+                    if timedelta(0) <= (e - ts) <= timedelta(hours=48)]
         labels.append(1 if upcoming else 0)
 
     positives = sum(labels)

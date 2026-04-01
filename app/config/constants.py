@@ -1,7 +1,7 @@
 # ─── Edge / sampling parameters ───────────────────────────────────────────────
-SAMPLING_RATE_HZ   = 1600.0
+SAMPLING_RATE_HZ   = 20000.0 # was 1600
 BURST_DURATION_S   = 1.0
-SAMPLES_PER_BURST  = int(SAMPLING_RATE_HZ * BURST_DURATION_S)  # 1600
+SAMPLES_PER_BURST  = 20480 # was 20kHz x 1s
 
 # ─── Signal processing ────────────────────────────────────────────────────────
 FILTER_ORDER   = 4
@@ -10,8 +10,8 @@ HIGHCUT_HZ     = 500.0
 WINDOW_LENGTH  = 512   # must be power of 2
 
 # ─── Bearing fault frequencies ────────────────────────────────────────────────
-BPFO_HZ = 105.0   # bearing pass frequency outer race
-BPFI_HZ = 155.0   # bearing pass frequency inner race
+BPFO_HZ = 236.4   # bearing pass frequency outer race
+BPFI_HZ = 296.9   # bearing pass frequency inner race
 
 # ─── Alert thresholds ─────────────────────────────────────────────────────────
 VIBRATION_WARN_MMS      = 6.0
@@ -24,43 +24,43 @@ CURRENT_CRITICAL_A      = 500.0
 # ─── Assets and sensors ───────────────────────────────────────────────────────
 ASSETS = [
     {
-        "asset_id":  "drill-a",
-        "name":      "Gearbox A",
-        "drill":     "Drill A",
-        "sensor_id": "sensor-drill-a",
+        "asset_id":    "bearing-1-ch3",
+        "name":        "Test1 Bearing 3",
+        "drill":       "Test 1",
+        "sensor_id":   "s-1-3",
         "sensor_type": "vibration",
-        "fault_level": 0.4,
+        "fault_level": 0.6,
     },
     {
-        "asset_id":  "drill-b",
-        "name":      "Gearbox B",
-        "drill":     "Drill B",
-        "sensor_id": "sensor-drill-b",
+        "asset_id":    "bearing-1-ch4",
+        "name":        "Test1 Bearing 4",
+        "drill":       "Test 1",
+        "sensor_id":   "s-1-4",
         "sensor_type": "vibration",
-        "fault_level": 0.1,
+        "fault_level": 0.7,
     },
     {
-        "asset_id":  "drill-c",
-        "name":      "Gearbox C",
-        "drill":     "Drill C",
-        "sensor_id": "sensor-drill-c",
+        "asset_id":    "bearing-2-ch1",
+        "name":        "Test2 Bearing 1",
+        "drill":       "Test 2",
+        "sensor_id":   "s-2-1",
         "sensor_type": "vibration",
         "fault_level": 0.9,
     },
     {
-        "asset_id":  "drill-d",
-        "name":      "Gearbox D",
-        "drill":     "Drill D",
-        "sensor_id": "sensor-drill-d",
+        "asset_id":    "bearing-3-ch3",
+        "name":        "Test3 Bearing 3",
+        "drill":       "Test 3",
+        "sensor_id":   "s-3-3",
         "sensor_type": "vibration",
-        "fault_level": 0.3,
+        "fault_level": 0.5,
     },
 ]
 
 # ─── Seed profiles (simulated health levels per asset) ────────────────────────
 SEED_PROFILES = {
-    "drill-a": {"rms": (7.0, 9.0),  "temp": (70.0, 74.0), "current": (390.0, 430.0)},
-    "drill-b": {"rms": (3.0, 5.5),  "temp": (60.0, 67.0), "current": (300.0, 360.0)},
-    "drill-c": {"rms": (9.0, 12.0), "temp": (76.0, 82.0), "current": (490.0, 560.0)},
-    "drill-d": {"rms": (5.5, 7.5),  "temp": (64.0, 70.0), "current": (340.0, 400.0)},
+    "bearing-1-ch3": {"rms": (5.0, 8.0),  "temp": (60.0, 70.0), "current": (300.0, 380.0)},
+    "bearing-1-ch4": {"rms": (6.0, 9.0),  "temp": (62.0, 72.0), "current": (320.0, 400.0)},
+    "bearing-2-ch1": {"rms": (9.0, 13.0), "temp": (74.0, 82.0), "current": (460.0, 540.0)},
+    "bearing-3-ch3": {"rms": (4.0, 7.0),  "temp": (58.0, 68.0), "current": (280.0, 360.0)},
 }
