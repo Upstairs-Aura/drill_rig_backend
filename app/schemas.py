@@ -12,8 +12,13 @@ class FeaturePayload(BaseModel):
     kurtosis: float
     skewness: float
     dominant_frequency: float
+    bpfo_ratio: float = 0.0   # BPFO amplitude / RMS — 0.0 if not a vibration sensor
+    bpfi_ratio: float = 0.0   # BPFI amplitude / RMS — 0.0 if not a vibration sensor
     temperature: float
     current: float
+    config_version: int = 0         # version of config used to generate this payload
+    sampling_rate_hz: float = 0.0   # actual rate used at edge — validated against config
+    window_length: int = 0          # actual FFT window used — validated against config
 
 class IngestRequest(BaseModel):
     records: List[FeaturePayload]
