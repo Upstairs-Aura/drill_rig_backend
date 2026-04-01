@@ -3,11 +3,12 @@ import numpy as np
 FEATURE_COLUMNS = [
     "rms", "peak", "crest_factor",
     "kurtosis", "skewness",
-    "dominant_frequency", "temperature", "current"
+    "dominant_frequency", "bpfo_ratio", "bpfi_ratio",
+    "temperature", "current"
 ]
 
 def record_to_features(record):
-    """Single FeatureRecord ORM object → numpy array for inference."""
+    """Single FeatureRecord ORM object is to numpy array for inference."""
     return np.array([[
         record.rms,
         record.peak,
@@ -15,9 +16,11 @@ def record_to_features(record):
         record.kurtosis,
         record.skewness,
         record.dominant_frequency,
+        getattr(record, 'bpfo_ratio', 0.0) or 0.0,
+        getattr(record, 'bpfi_ratio', 0.0) or 0.0,
         record.temperature,
         record.current,
-    ]])
+        ]])
 
 def records_to_dataframe(records):
     """List of FeatureRecord objects → pandas DataFrame for training."""
