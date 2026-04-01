@@ -28,6 +28,8 @@ class FeatureRecord(Base):
     kurtosis = Column(Float)
     skewness = Column(Float)
     dominant_frequency = Column(Float)
+    bpfo_ratio = Column(Float, default=0.0)  # BPFO amplitude / RMS
+    bpfi_ratio = Column(Float, default=0.0)  # BPFI amplitude / RMS
     temperature = Column(Float)
     current = Column(Float)
 
