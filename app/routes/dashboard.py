@@ -102,14 +102,34 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
         },
     ]
 
+# @router.get("/{asset_id}/health-history")
+# def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
+#     from datetime import datetime, timedelta
+#     since = datetime.utcnow() - timedelta(days=days)
+#     records = db.query(FeatureRecord).filter(
+#         FeatureRecord.asset_id == asset_id,
+#         FeatureRecord.timestamp >= since
+#     ).order_by(FeatureRecord.timestamp).all()
+#     t_hold = get_thresholds(asset_id, db)
+#     critical_rms = t_hold["vibration_critical_mms"]
+#     return [
+#         {
+#             "day": r.timestamp.strftime("%b %d"),
+#             "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
+#         }
+#         for r in records
+#     ]
+
 @router.get("/{asset_id}/health-history")
 def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
-    from datetime import datetime, timedelta
-    since = datetime.utcnow() - timedelta(days=days)
+    # NASA data is from 2003-2004 so a "last N days" window returns nothing.
+    # Instead return the last `days` worth of records by count, oldest first.
     records = db.query(FeatureRecord).filter(
         FeatureRecord.asset_id == asset_id,
-        FeatureRecord.timestamp >= since
-    ).order_by(FeatureRecord.timestamp).all()
+        ).order_by(FeatureRecord.timestamp.desc()).limit(days * 6).all()
+    # Reverse so chart reads left-to-right oldest→newest
+    records = list(reversed(records))
+
     t_hold = get_thresholds(asset_id, db)
     critical_rms = t_hold["vibration_critical_mms"]
     return [
