@@ -5,20 +5,12 @@ import requests
 from datetime import datetime, timezone
 
 API_URL = "http://localhost:8000"
-SAMPLING_RATE_HZ = 1600
-BURST_DURATION_S = 1.0
-WINDOW_LENGTH    = 512
-FILTER_ORDER     = 4
-LOWCUT_HZ        = 10.0
-HIGHCUT_HZ       = 500.0
 
-ASSETS = [
-    {"asset_id": "drill-a", "sensor_id": "sensor-drill-a", "fault_level": 0.4},
-    {"asset_id": "drill-b", "sensor_id": "sensor-drill-b", "fault_level": 0.1},
-    {"asset_id": "drill-c", "sensor_id": "sensor-drill-c", "fault_level": 0.9},
-    {"asset_id": "drill-d", "sensor_id": "sensor-drill-d", "fault_level": 0.3},
-]
-
+from app.config.constants import (
+    SAMPLING_RATE_HZ, BURST_DURATION_S, WINDOW_LENGTH,
+    FILTER_ORDER, LOWCUT_HZ, HIGHCUT_HZ,
+    BPFO_HZ, BPFI_HZ, ASSETS,
+)
 
 def generate_raw_signal(fault_level: float) -> np.ndarray:
     """Synthetic vibration signal: base rotation + harmonics + fault impulses + noise."""
