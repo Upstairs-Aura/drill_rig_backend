@@ -32,6 +32,8 @@ class FeatureRecord(Base):
     bpfi_ratio = Column(Float, default=0.0)  # BPFI amplitude / RMS
     temperature = Column(Float)
     current = Column(Float)
+    source = Column(String, default="live")   # "ims" or "live"
+    label  = Column(Integer, nullable=True)   # NULL = unlabelled, 0 = normal, 1 = pre-failure
 
 class MaintenanceEvent(Base):
     __tablename__ = "maintenance_events"

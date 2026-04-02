@@ -108,6 +108,7 @@ def seed_nasa():
                 bpfi_ratio=row["bpfi_ratio"],
                 temperature=row["temperature"],
                 current=row["current"],
+                source="ims",
             ))
         total += len(df)
         print(f"  Inserted {len(df)} records for {a['asset_id']}")

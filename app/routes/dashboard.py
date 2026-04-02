@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import FeatureRecord, Asset, PredictionRecord, AssetConfig
 from datetime import datetime
-from app.ml.predict import predict as run_predict
-
+from app.ml.predict import predict as run_predict, LSTM_SEQ_LEN
 
 router = APIRouter(prefix="/api/v1/assets", tags=["Dashboard"])
 
@@ -155,8 +154,9 @@ def get_system_status(asset_id: str, db: Session = Depends(get_db)):
 @router.get("/{asset_id}/predict")
 def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     recent = db.query(FeatureRecord).filter(
-        FeatureRecord.asset_id == asset_id
-    ).order_by(FeatureRecord.timestamp.desc()).limit(7).all()
+        FeatureRecord.asset_id == asset_id,
+        FeatureRecord.source == "Live", #live data for inference
+    ).order_by(FeatureRecord.timestamp.desc()).limit(LSTM_SEQ_LEN).all()
     recent = list(reversed(recent))  # oldest first
 
     if not recent:

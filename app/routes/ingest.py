@@ -78,6 +78,8 @@ def ingest_records(payload: IngestRequest, db: Session = Depends(get_db)):
             bpfi_ratio=record.bpfi_ratio,
             temperature=record.temperature,
             current=record.current,
+            source="live",   # <-- add this line
+            label=None,      # <-- add this line
         )
         db.add(db_record)
     db.commit()

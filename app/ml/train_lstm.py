@@ -1,11 +1,14 @@
 import sys, os
+
+from keras.src.regularizers import L2
+from tensorflow.python.keras.regularizers import l2
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
@@ -15,8 +18,11 @@ from app.models import FeatureRecord, MaintenanceEvent
 from app.ml.features import FEATURE_COLUMNS
 from datetime import timedelta
 
-SEQUENCE_LENGTH = 24 # 24 snapshots × 10 min ≈ 4 hours of history
-#old 7 consecutive daily readings = one week of history
+SEQUENCE_LENGTH = 24
+LABEL_WINDOW_H  = 72
+
+ALL_ASSETS = ["bearing-1-ch3", "bearing-1-ch4", "bearing-2-ch1", "bearing-3-ch3"]
+
 
 def build_sequences(df, labels, seq_len):
     X, y = [], []
@@ -25,93 +31,157 @@ def build_sequences(df, labels, seq_len):
         y.append(labels[i + seq_len])
     return np.array(X), np.array(y)
 
-def train():
-    db = SessionLocal()
-    records = db.query(FeatureRecord).order_by(FeatureRecord.timestamp).all()
-    events  = db.query(MaintenanceEvent).all()
-    db.close()
 
-    if len(records) < SEQUENCE_LENGTH + 5:
-        print(f"Need at least {SEQUENCE_LENGTH + 5} records. Run seed.py first.")
-        return
 
-    event_times = [e.timestamp for e in events]
 
-    # Build a labelled dataframe from all records
-    rows, timestamps, labels = [], [], []
+
+def load_asset_data(db, asset_id, event_times_by_asset):
+    records = (
+        db.query(FeatureRecord)
+        .filter(
+            FeatureRecord.asset_id == asset_id,
+            FeatureRecord.source   == "ims",
+            )
+        .order_by(FeatureRecord.timestamp)
+        .all()
+    )
+    if not records:
+        return pd.DataFrame(), np.array([])
+
+    rows, timestamps = [], []
     for r in records:
         rows.append({col: getattr(r, col) for col in FEATURE_COLUMNS})
         timestamps.append(r.timestamp)
 
     df = pd.DataFrame(rows)
-
-    # Label: 1 if a failure occurred within 7 days after this reading
+    event_times = event_times_by_asset.get(asset_id, [])
+    labels = []
     for ts in timestamps:
         upcoming = [e for e in event_times
-                    if timedelta(0) <= (e - ts) <= timedelta(hours=48)]
+                    if timedelta(0) <= (e - ts) <= timedelta(hours=LABEL_WINDOW_H)]
         labels.append(1 if upcoming else 0)
 
-    positives = sum(labels)
-    print(f"Building sequences from {len(df)} records — "
-          f"{positives} pre-failure labels, {len(df) - positives} normal")
+    pos = sum(labels)
+    print(f"  {asset_id}: {len(records)} records, {pos} pre-failure ({pos/len(records)*100:.1f}%)")
+    return df, np.array(labels)
 
-    # Scale features before sequencing
+
+def train():
+    db = SessionLocal()
+
+    all_events = db.query(MaintenanceEvent).all()
+    event_times_by_asset = {}
+    for e in all_events:
+        event_times_by_asset.setdefault(e.asset_id, []).append(e.timestamp)
+
+    print("\n--- Loading all assets ---")
+    train_dfs, train_labels = [], []
+    for asset_id in ALL_ASSETS:
+        df, labels = load_asset_data(db, asset_id, event_times_by_asset)
+        if df.empty:
+            print(f"  WARNING: no records for {asset_id}")
+            continue
+        train_dfs.append(df)
+        train_labels.append(labels)
+
+    # Include any operator-confirmed live records
+    live_records = (
+        db.query(FeatureRecord)
+        .filter(FeatureRecord.source == "live", FeatureRecord.label != None)
+        .order_by(FeatureRecord.timestamp)
+        .all()
+    )
+    db.close()
+
+    if live_records:
+        live_rows = [{col: getattr(r, col) for col in FEATURE_COLUMNS} for r in live_records]
+    live_lbls = np.array([r.label for r in live_records])
+    print(f"\nLabelled live records: {len(live_records)} ({live_lbls.sum()} pre-failure)")
+
+
+    if not train_dfs:
+        print("ERROR: Missing training data. Check source column and seed.")
+        return
+    all_df = pd.concat(train_dfs, ignore_index=True)
     scaler = StandardScaler()
-    df_scaled = pd.DataFrame(scaler.fit_transform(df), columns=FEATURE_COLUMNS)
+    scaler.fit(all_df)
 
-    X, y = build_sequences(df_scaled, labels, SEQUENCE_LENGTH)
-    print(f"Sequence shape: {X.shape}, Labels shape: {y.shape}")
+    X_train_parts, y_train_parts = [], []
+    X_val_parts,   y_val_parts   = [], []
+    X_test_parts,  y_test_parts  = [], []
 
-    if sum(y) < 3:
-        print("Too few positive sequences after windowing. Add more maintenance events.")
+    for df, labels in zip(train_dfs, train_labels):
+        df_scaled = pd.DataFrame(scaler.transform(df), columns=FEATURE_COLUMNS)
+        if len(df_scaled) <= SEQUENCE_LENGTH:
+            continue
+        X, y = build_sequences(df_scaled, labels, SEQUENCE_LENGTH)
+        n = len(X)
+        t = int(n * 0.70)
+        v = int(n * 0.85)
+        X_train_parts.append(X[:t]);  y_train_parts.append(y[:t])
+        X_val_parts.append(X[t:v]);   y_val_parts.append(y[t:v])
+        X_test_parts.append(X[v:]);   y_test_parts.append(y[v:])
+
+    X_train = np.concatenate(X_train_parts)
+    y_train = np.concatenate(y_train_parts)
+    X_val   = np.concatenate(X_val_parts)
+    y_val   = np.concatenate(y_val_parts)
+    X_test  = np.concatenate(X_test_parts)
+    y_test  = np.concatenate(y_test_parts)
+
+    print(f"\nTrain: {len(X_train)} ({y_train.sum()} pos) | "
+          f"Val: {len(X_val)} ({y_val.sum()} pos) | "
+          f"Test: {len(X_test)} ({y_test.sum()} pos)")
+
+    if y_train.sum() < 3:
+        print("ERROR: Too few positives in training. Check source column backfill.")
         return
 
-    # Chronological 70/15/15 split — no shuffle, order matters for time-series
-    n = len(X)
-    train_end = int(n * 0.70)
-    val_end   = int(n * 0.85)
+    pos = y_train.sum()
+    neg = len(y_train) - pos
+    class_weight = {0: 1.0, 1: float(neg / pos)}
+    print(f"Class weights → Normal: 1.00, Pre-failure: {neg/pos:.2f}")
 
-    X_train, y_train = X[:train_end],       y[:train_end]
-    X_val,   y_val   = X[train_end:val_end], y[train_end:val_end]
-    X_test,  y_test  = X[val_end:],          y[val_end:]
-
-    print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
-
-    # LSTM architecture: 2 stacked layers with dropout for regularisation
     model = Sequential([
         LSTM(64, input_shape=(SEQUENCE_LENGTH, len(FEATURE_COLUMNS)),
-             return_sequences=True),
-        Dropout(0.2),
-        LSTM(32, return_sequences=False),
-        Dropout(0.2),
+             return_sequences=True, kernel_regularizer=L2(0.001)),
+        Dropout(0.5),
+        LSTM(32, return_sequences=False, kernel_regularizer=L2(0.001)),
+        Dropout(0.5),
         Dense(1, activation="sigmoid"),
     ])
+
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
     model.summary()
-
-    early_stop = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True)
 
     model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=50,
+        class_weight=class_weight,
+        epochs=30,
+        shuffle=True,
         batch_size=16,
-        callbacks=[early_stop],
+        callbacks=[],
         verbose=1,
     )
 
-    # Evaluate on held-out test set
-    y_pred = (model.predict(X_test) >= 0.5).astype(int).flatten()
-    print("\n--- LSTM Test Set Results ---")
-    print(classification_report(y_test, y_pred, target_names=["Normal", "Pre-failure"],
-                                zero_division=0))
+    threshold = 0.50
 
-    # Save model and scaler
+    print("\n--- Validation Set Results ---")
+    print(classification_report(y_val,
+                                (model.predict(X_val, verbose=0).flatten() >= threshold).astype(int),
+                                target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
+
+    print(classification_report(y_test,
+                            (model.predict(X_test, verbose=0).flatten() >= threshold).astype(int),
+                            target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
+
     os.makedirs("app/models", exist_ok=True)
     model.save("app/models/lstm_model.keras")
-    joblib.dump(scaler, "app/models/lstm_scaler.pkl")
-    print("Saved → app/models/lstm_model.keras")
-    print("Saved → app/models/lstm_scaler.pkl")
+    joblib.dump(scaler,    "app/models/lstm_scaler.pkl")
+    joblib.dump(threshold, "app/models/lstm_threshold.pkl")
+    print(f"Saved model, scaler, threshold ({threshold:.2f})")
+
 
 if __name__ == "__main__":
     train()
