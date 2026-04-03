@@ -16,24 +16,30 @@ from app.config.constants import (
 Base.metadata.create_all(bind=engine)
 
 FAILURE_EVENTS = [
-    ("bearing-1-ch3", datetime(2003, 11, 25, 23, 39, 56), "inner_race_failure",
-     "Test Set 1, Bearing 3 inner race defect"),
-    ("bearing-1-ch4", datetime(2003, 11, 25, 23, 39, 56), "rolling_element_failure",
-     "Test Set 1, Bearing 4 rolling element defect"),
-    ("bearing-2-ch1", datetime(2004, 2, 19, 6, 22, 39), "outer_race_failure",
-     "Test Set 2, Bearing 1 outer race defect"),
-    ("bearing-3-ch3", datetime(2004, 4, 8, 9, 27, 13), "outer_race_failure",
-     "Test Set 3, Bearing 3 outer race defect"),
+    # Set 1: both channels monitor Bearing 3 (inner race failure, same timestamp)
+    ("set1-bearing3-x", datetime(2003, 11, 25, 23, 39, 56), "inner_race_failure",
+     "IMS Set 1, Bearing 3 x-axis (Ch 5), inner race defect"),
+    ("set1-bearing3-y", datetime(2003, 11, 25, 23, 39, 56), "inner_race_failure",
+     "IMS Set 1, Bearing 3 y-axis (Ch 6), inner race defect"),
+    # Set 2: Bearing 1 outer race failure
+    ("set2-bearing1", datetime(2004, 2, 19, 6, 22, 39), "outer_race_failure",
+     "IMS Set 2, Bearing 1 (Ch 1), outer race defect"),
+    # Set 3: Bearing 3 outer race failure
+    ("set3-bearing3", datetime(2004, 4, 8, 9, 27, 13), "outer_race_failure",
+     "IMS Set 3, Bearing 3 (Ch 3), outer race defect"),
 ]
 
 ASSETS = [
-    {"asset_id": "bearing-1-ch3", "name": "Test1 Bearing 3", "sensor_id": "s-1-3",
-     "folder": r"C:\Users\User\Downloads\1st_test\1st_test", "channel": 2},
-    {"asset_id": "bearing-1-ch4", "name": "Test1 Bearing 4", "sensor_id": "s-1-4",
-     "folder": r"C:\Users\User\Downloads\1st_test\1st_test", "channel": 3},
-    {"asset_id": "bearing-2-ch1", "name": "Test2 Bearing 1", "sensor_id": "s-2-1",
+    # Set 1 has 8 channels (2 per bearing): Bearing 3 = Ch 5 & 6 = 0-indexed cols 4 & 5
+    {"asset_id": "set1-bearing3-x", "name": "Set1 Bearing 3 (x-axis)", "sensor_id": "s-1-b3-x",
+     "folder": r"C:\Users\User\Downloads\1st_test\1st_test", "channel": 4},
+    {"asset_id": "set1-bearing3-y", "name": "Set1 Bearing 3 (y-axis)", "sensor_id": "s-1-b3-y",
+     "folder": r"C:\Users\User\Downloads\1st_test\1st_test", "channel": 5},
+    # Set 2 has 4 channels (1 per bearing): Bearing 1 = Ch 1 = 0-indexed col 0
+    {"asset_id": "set2-bearing1", "name": "Set2 Bearing 1", "sensor_id": "s-2-b1",
      "folder": r"C:\Users\User\Downloads\2nd_test\2nd_test", "channel": 0},
-    {"asset_id": "bearing-3-ch3", "name": "Test3 Bearing 3", "sensor_id": "s-3-3",
+    # Set 3 has 4 channels (1 per bearing): Bearing 3 = Ch 3 = 0-indexed col 2
+    {"asset_id": "set3-bearing3", "name": "Set3 Bearing 3", "sensor_id": "s-3-b3",
      "folder": r"C:\Users\User\Downloads\3rd_test\4th_test", "channel": 2},
 ]
 
