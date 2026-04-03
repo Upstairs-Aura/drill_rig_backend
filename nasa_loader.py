@@ -11,7 +11,7 @@ SAMPLING_RATE = 20000   # 20 kHz
 BPFO_HZ = 236.4         # outer race fault frequency
 BPFI_HZ = 296.9         # inner race fault frequency
 
-def bandpass_filter(signal, lowcut=100, highcut=5000, fs=SAMPLING_RATE, order=4):
+def bandpass_filter(signal, lowcut=100, highcut=500, fs=SAMPLING_RATE, order=4):
     nyq = fs / 2
     b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
     return filtfilt(b, a, signal)
