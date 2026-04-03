@@ -161,7 +161,7 @@ def train():
         epochs=6,
         shuffle=True,
         batch_size=16,
-        callbacks=[],
+        callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
         verbose=1,
     )
 
