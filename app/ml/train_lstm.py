@@ -1,7 +1,5 @@
 import sys, os
-
 from keras.src.regularizers import L2
-from tensorflow.python.keras.regularizers import l2
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,12 +21,11 @@ LABEL_WINDOW_H  = 72
 
 ALL_ASSETS = ["set1-bearing3-x", "set1-bearing3-y", "set2-bearing1", "set3-bearing3"]
 
-
 def build_sequences(df, labels, seq_len):
     X, y = [], []
     for i in range(len(df) - seq_len):
         X.append(df.iloc[i:i + seq_len].values)
-        y.append(labels[i + seq_len])
+        y.append(labels[i + seq_len-1])
     return np.array(X), np.array(y)
 
 
@@ -102,7 +99,6 @@ def train():
         train_labels.append(live_lbls)
     else:
         print("\nNo labelled live records found — training on IMS data only")
-        db.close()
 
 
     if not train_dfs:
@@ -165,7 +161,7 @@ def train():
         validation_data=(X_val, y_val),
         class_weight=class_weight,
         epochs=30,
-        shuffle=True,
+        shuffle=False,
         batch_size=16,
         callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
         verbose=1,
