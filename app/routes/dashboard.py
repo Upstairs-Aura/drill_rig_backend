@@ -101,23 +101,23 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
         },
     ]
 
-# @router.get("/{asset_id}/health-history")
-# def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
-#     from datetime import datetime, timedelta
-#     since = datetime.utcnow() - timedelta(days=days)
-#     records = db.query(FeatureRecord).filter(
-#         FeatureRecord.asset_id == asset_id,
-#         FeatureRecord.timestamp >= since
-#     ).order_by(FeatureRecord.timestamp).all()
-#     t_hold = get_thresholds(asset_id, db)
-#     critical_rms = t_hold["vibration_critical_mms"]
-#     return [
-#         {
-#             "day": r.timestamp.strftime("%b %d"),
-#             "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
-#         }
-#         for r in records
-#     ]
+@router.get("/{asset_id}/health-history")
+def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
+    from datetime import datetime, timedelta
+    since = datetime.utcnow() - timedelta(days=days)
+    records = db.query(FeatureRecord).filter(
+        FeatureRecord.asset_id == asset_id,
+        FeatureRecord.timestamp >= since
+    ).order_by(FeatureRecord.timestamp).all()
+    t_hold = get_thresholds(asset_id, db)
+    critical_rms = t_hold["vibration_critical_mms"]
+    return [
+        {
+            "day": r.timestamp.strftime("%b %d"),
+            "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
+        }
+        for r in records
+    ]
 
 @router.get("/{asset_id}/health-history")
 def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
@@ -247,12 +247,17 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
         })
 
     # nextMaintenance: scale urgency by how close rms is to the critical threshold
-    ratio = record.rms / t_hold["vibration_critical_mms"]
-    if ratio >= 1.0:
+    latest_prediction = db.query(PredictionRecord).filter(
+        PredictionRecord.asset_id == asset_id
+    ).order_by(PredictionRecord.timestamp.desc()).first()
+
+    risk = latest_prediction.risk_score if latest_prediction else 0.0
+
+    if risk >= 0.80:
         next_maintenance = "Immediate"
-    elif ratio >= 0.85:
+    elif risk >= 0.60:
         next_maintenance = "3–7 days"
-    elif ratio >= 0.65:
+    elif risk >= 0.40:
         next_maintenance = "14 days"
     else:
         next_maintenance = "30+ days"
