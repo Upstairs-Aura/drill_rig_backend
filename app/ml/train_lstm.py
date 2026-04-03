@@ -21,7 +21,7 @@ from datetime import timedelta
 SEQUENCE_LENGTH = 24
 LABEL_WINDOW_H  = 72
 
-ALL_ASSETS = ["bearing-1-ch3", "bearing-1-ch4", "bearing-2-ch1", "bearing-3-ch3"]
+ALL_ASSETS = ["set1-bearing3-x", "set1-bearing3-y", "set2-bearing1", "set3-bearing3"]
 
 
 def build_sequences(df, labels, seq_len):
@@ -145,9 +145,9 @@ def train():
     model = Sequential([
         LSTM(64, input_shape=(SEQUENCE_LENGTH, len(FEATURE_COLUMNS)),
              return_sequences=True, kernel_regularizer=L2(0.001)),
-        Dropout(0.5),
+        Dropout(0.3),
         LSTM(32, return_sequences=False, kernel_regularizer=L2(0.001)),
-        Dropout(0.5),
+        Dropout(0.3),
         Dense(1, activation="sigmoid"),
     ])
 
@@ -158,7 +158,7 @@ def train():
         X_train, y_train,
         validation_data=(X_val, y_val),
         class_weight=class_weight,
-        epochs=30,
+        epochs=6,
         shuffle=True,
         batch_size=16,
         callbacks=[],
@@ -173,8 +173,8 @@ def train():
                                 target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
 
     print(classification_report(y_test,
-                            (model.predict(X_test, verbose=0).flatten() >= threshold).astype(int),
-                            target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
+                                (model.predict(X_test, verbose=0).flatten() >= threshold).astype(int),
+                                target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
 
     os.makedirs("app/models", exist_ok=True)
     model.save("app/models/lstm_model.keras")
