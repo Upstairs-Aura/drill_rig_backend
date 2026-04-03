@@ -31,11 +31,7 @@ def _load():
 _load()
 
 def predict(record, recent_records=None):
-    if _rf_model is not None:
-        features = record_to_features(record)
-        prob = _rf_model.predict_proba(features)[0][1]
-        return {"anomaly": bool(prob >= 0.5), "risk_score": round(float(prob), 4), "source": "random_forest"}
-
+    # 1. LSTM first — preferred when we have a full sequence
     if _lstm_model is not None and recent_records is not None:
         if len(recent_records) >= LSTM_SEQ_LEN:
             import pandas as pd
@@ -48,6 +44,13 @@ def predict(record, recent_records=None):
             prob = float(_lstm_model.predict(seq_input, verbose=0)[0][0])
             return {"anomaly": bool(prob >= _lstm_threshold), "risk_score": round(prob, 4), "source": "lstm"}
 
+    # 2. Random Forest — fallback when sequence is too short
+    if _rf_model is not None:
+        features = record_to_features(record)
+        prob = _rf_model.predict_proba(features)[0][1]
+        return {"anomaly": bool(prob >= 0.5), "risk_score": round(float(prob), 4), "source": "random_forest"}
+
+    # 3. Isolation Forest — last resort, no labels needed
     if _iso_model is not None:
         features = record_to_features(record)
         raw  = _iso_model.decision_function(features)[0]

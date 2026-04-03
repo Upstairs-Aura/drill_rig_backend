@@ -95,8 +95,14 @@ def train():
 
     if live_records:
         live_rows = [{col: getattr(r, col) for col in FEATURE_COLUMNS} for r in live_records]
-    live_lbls = np.array([r.label for r in live_records])
-    print(f"\nLabelled live records: {len(live_records)} ({live_lbls.sum()} pre-failure)")
+        live_lbls = np.array([r.label for r in live_records])
+        live_df   = pd.DataFrame(live_rows)
+        print(f"\nLabelled live records: {len(live_records)} ({live_lbls.sum()} pre-failure)")
+        train_dfs.append(live_df)
+        train_labels.append(live_lbls)
+    else:
+        print("\nNo labelled live records found — training on IMS data only")
+        db.close()
 
 
     if not train_dfs:
@@ -158,20 +164,34 @@ def train():
         X_train, y_train,
         validation_data=(X_val, y_val),
         class_weight=class_weight,
-        epochs=6,
+        epochs=30,
         shuffle=True,
         batch_size=16,
         callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
         verbose=1,
     )
 
-    threshold = 0.50
+    from sklearn.metrics import f1_score
+
+    val_probs = model.predict(X_val, verbose=0).flatten()
+
+    # Sweep thresholds on validation set, optimise for pre-failure F1
+    best_threshold, best_f1 = 0.5, 0.0
+    for t in np.arange(0.1, 0.9, 0.05):
+        preds = (val_probs >= t).astype(int)
+        f1 = f1_score(y_val, preds, pos_label=1, zero_division=0)
+        if f1 > best_f1:
+            best_f1, best_threshold = f1, float(t)
+
+    threshold = best_threshold
+    print(f"\nOptimal threshold: {threshold:.2f}  (val pre-failure F1={best_f1:.3f})")
 
     print("\n--- Validation Set Results ---")
     print(classification_report(y_val,
-                                (model.predict(X_val, verbose=0).flatten() >= threshold).astype(int),
+                                (val_probs >= threshold).astype(int),
                                 target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
 
+    print("--- Test Set Results ---")
     print(classification_report(y_test,
                                 (model.predict(X_test, verbose=0).flatten() >= threshold).astype(int),
                                 target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))

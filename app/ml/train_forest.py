@@ -30,7 +30,7 @@ def train():
     labels = []
     for ts in timestamps:
         upcoming = [e for e in event_times
-                    if timedelta(0) <= (e - ts) <= timedelta(days=7)]
+                    if timedelta(0) <= (e - ts) <= timedelta(hours=72)]
         labels.append(1 if upcoming else 0)
 
     df["label"] = labels
