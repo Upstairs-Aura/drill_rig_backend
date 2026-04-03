@@ -24,34 +24,38 @@ CURRENT_CRITICAL_A      = 500.0
 # ─── Assets and sensors ───────────────────────────────────────────────────────
 ASSETS = [
     {
-        "asset_id":    "bearing-1-ch3",
-        "name":        "Test1 Bearing 3",
-        "drill":       "Test 1",
-        "sensor_id":   "s-1-3",
+        # Set 1, Ch 5 (0-indexed col 4) — Bearing 3 x-axis, inner race failure
+        "asset_id":    "set1-bearing3-x",
+        "name":        "Set1 Bearing 3 (x-axis)",
+        "drill":       "Test Set 1",
+        "sensor_id":   "s-1-b3-x",
         "sensor_type": "vibration",
         "fault_level": 0.6,
     },
     {
-        "asset_id":    "bearing-1-ch4",
-        "name":        "Test1 Bearing 4",
-        "drill":       "Test 1",
-        "sensor_id":   "s-1-4",
+        # Set 1, Ch 6 (0-indexed col 5) — Bearing 3 y-axis, inner race failure
+        "asset_id":    "set1-bearing3-y",
+        "name":        "Set1 Bearing 3 (y-axis)",
+        "drill":       "Test Set 1",
+        "sensor_id":   "s-1-b3-y",
         "sensor_type": "vibration",
         "fault_level": 0.7,
     },
     {
-        "asset_id":    "bearing-2-ch1",
-        "name":        "Test2 Bearing 1",
-        "drill":       "Test 2",
-        "sensor_id":   "s-2-1",
+        # Set 2, Ch 1 (0-indexed col 0) — Bearing 1, outer race failure
+        "asset_id":    "set2-bearing1",
+        "name":        "Set2 Bearing 1",
+        "drill":       "Test Set 2",
+        "sensor_id":   "s-2-b1",
         "sensor_type": "vibration",
         "fault_level": 0.9,
     },
     {
-        "asset_id":    "bearing-3-ch3",
-        "name":        "Test3 Bearing 3",
-        "drill":       "Test 3",
-        "sensor_id":   "s-3-3",
+        # Set 3, Ch 3 (0-indexed col 2) — Bearing 3, outer race failure
+        "asset_id":    "set3-bearing3",
+        "name":        "Set3 Bearing 3",
+        "drill":       "Test Set 3",
+        "sensor_id":   "s-3-b3",
         "sensor_type": "vibration",
         "fault_level": 0.5,
     },
@@ -59,8 +63,8 @@ ASSETS = [
 
 # ─── Seed profiles (simulated health levels per asset) ────────────────────────
 SEED_PROFILES = {
-    "bearing-1-ch3": {"rms": (5.0, 8.0),  "temp": (60.0, 70.0), "current": (300.0, 380.0)},
-    "bearing-1-ch4": {"rms": (6.0, 9.0),  "temp": (62.0, 72.0), "current": (320.0, 400.0)},
-    "bearing-2-ch1": {"rms": (9.0, 13.0), "temp": (74.0, 82.0), "current": (460.0, 540.0)},
-    "bearing-3-ch3": {"rms": (4.0, 7.0),  "temp": (58.0, 68.0), "current": (280.0, 360.0)},
+    "set1-bearing3-x": {"rms": (5.0, 8.0),  "temp": (60.0, 70.0), "current": (300.0, 380.0)},
+    "set1-bearing3-y": {"rms": (6.0, 9.0),  "temp": (62.0, 72.0), "current": (320.0, 400.0)},
+    "set2-bearing1":   {"rms": (9.0, 13.0), "temp": (74.0, 82.0), "current": (460.0, 540.0)},
+    "set3-bearing3":   {"rms": (4.0, 7.0),  "temp": (58.0, 68.0), "current": (280.0, 360.0)},
 }
