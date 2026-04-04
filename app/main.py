@@ -7,7 +7,6 @@ from app.routes import dashboard, ingest, config, label
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Drill Rig Predictive Maintenance API")
-app.include_router(config.router)
 
 # Middleware for cors (connections)
 app.add_middleware(
@@ -18,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(config.router)
 app.include_router(dashboard.router)
 app.include_router(ingest.router)
 app.include_router(label.router)

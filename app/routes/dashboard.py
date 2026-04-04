@@ -141,7 +141,7 @@ def get_system_status(asset_id: str, db: Session = Depends(get_db)):
 def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     recent = db.query(FeatureRecord).filter(
         FeatureRecord.asset_id == asset_id,
-        FeatureRecord.source == "live",  # matches ingest.py which inserts lowercase "live"
+        #FeatureRecord.source == "live",  # matches ingest.py which inserts lowercase "live"
     ).order_by(FeatureRecord.timestamp.desc()).limit(LSTM_SEQ_LEN).all()
     recent = list(reversed(recent))  # oldest first
 

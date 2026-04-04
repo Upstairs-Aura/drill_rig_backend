@@ -14,7 +14,11 @@ from datetime import timedelta
 
 def train():
     db = SessionLocal()
-    records = db.query(FeatureRecord).all()
+    records = db.query(FeatureRecord).filter(
+        (FeatureRecord.source=="ims") |
+        (FeatureRecord.source=="live") &
+        (FeatureRecord.label != None)
+    ).order_by(FeatureRecord.timestamp).all()
     events  = db.query(MaintenanceEvent).all()
     db.close()
 

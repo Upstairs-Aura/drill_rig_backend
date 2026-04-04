@@ -1,6 +1,6 @@
 from app.schemas import ConfigPayload
 
-MAX_DATA_RATE_HZ = 5000   # hardware output limit
+MAX_DATA_RATE_HZ = 100000   # hardware output limit
 
 def validate_config(payload: ConfigPayload) -> list[str]:
     errors = []

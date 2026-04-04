@@ -48,7 +48,7 @@ class PredictionRecord(Base):
     id          = Column(Integer, primary_key=True, autoincrement=True)
     asset_id    = Column(String, ForeignKey("assets.id"))
     timestamp   = Column(DateTime, default=datetime.utcnow)
-    model_source = Column(String)    # "isolation_forest" or "random_forest"
+    model_source = Column(String)    # "lstm , isolation_forest or random_forest
     anomaly     = Column(Integer)    # 1 = anomaly, 0 = normal
     risk_score  = Column(Float)      # 0.0 – 1.0
 
