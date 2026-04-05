@@ -110,7 +110,7 @@ def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_
         db.query(FeatureRecord)
         .filter(FeatureRecord.asset_id == asset_id)
         .order_by(FeatureRecord.timestamp.desc())
-        .limit(days * 6)
+        .limit(days * 144)
         .all()
     )
     records = list(reversed(records))  # oldest → newest for chart
