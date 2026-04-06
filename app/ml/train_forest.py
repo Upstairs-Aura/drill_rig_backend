@@ -1,4 +1,7 @@
 import sys, os
+
+from app.ml.predict import _load
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import joblib
@@ -164,3 +167,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+    _load()

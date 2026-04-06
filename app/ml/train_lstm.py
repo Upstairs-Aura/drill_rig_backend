@@ -15,6 +15,7 @@ from app.database import SessionLocal
 from app.models import FeatureRecord, MaintenanceEvent
 from app.ml.features import FEATURE_COLUMNS
 from datetime import timedelta
+from app.ml.predict import _load
 
 SEQUENCE_LENGTH = 24
 LABEL_WINDOW_H  = 72
@@ -203,3 +204,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+    _load()

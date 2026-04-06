@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from app.database import get_db
 from app.models import FeatureRecord, MaintenanceEvent
+from fastapi import APIRouter, Depends, BackgroundTasks
 
 router = APIRouter(prefix="/api/v1/label", tags=["Labelling"])
 
@@ -14,8 +14,18 @@ class FailureConfirmRequest(BaseModel):
     event_type:   str = "confirmed_failure"
     notes:        str = ""
 
+def retrain_models():
+    from app.ml.train_forest import train as train_rf
+    from app.ml.train_lstm import train as train_lstm
+    from app.ml.predict import _load
+    print("Retraining triggered by failure event...")
+    train_rf()
+    train_lstm()
+    _load()
+    print("Retraining complete. Models reloaded.")
+
 @router.post("/confirm-failure")
-def confirm_failure(req: FailureConfirmRequest, db: Session = Depends(get_db)):
+def confirm_failure(req: FailureConfirmRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     cutoff = req.failure_time - timedelta(hours=req.window_hours)
 
     pre_failure_count = db.query(FeatureRecord).filter(
@@ -37,6 +47,7 @@ def confirm_failure(req: FailureConfirmRequest, db: Session = Depends(get_db)):
         event_type=req.event_type, notes=req.notes,
     ))
     db.commit()
+    background_tasks.add_task(retrain_models)
     return {"pre_failure_labelled": pre_failure_count, "normal_labelled": normal_count}
 
 @router.get("/summary/{asset_id}")
