@@ -7,7 +7,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, recall_score
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
@@ -191,6 +191,8 @@ def train():
     print(classification_report(y_test,
                                 (model.predict(X_test, verbose=0).flatten() >= threshold).astype(int),
                                 target_names=["Normal", "Pre-failure"], labels=[0, 1], zero_division=0))
+    joblib.dump({"pre_failure_f1": float(f1_score(y_test, (model.predict(X_test, verbose=0).flatten() >= best_threshold).astype(int), pos_label=1, zero_division=0))},
+                "app/models/lstm_metrics.pkl")
 
     os.makedirs("app/models", exist_ok=True)
     model.save("app/models/lstm_model.keras")

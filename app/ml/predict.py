@@ -1,23 +1,33 @@
 import os, joblib
 import numpy as np
 from app.ml.features import record_to_features, FEATURE_COLUMNS
+from sklearn.pipeline import Pipeline
 
 _iso_model      = None
-_rf_model       = None
+_rf_model:   Pipeline | None = None
 _lstm_model     = None
 _lstm_scaler    = None
 _lstm_threshold = 0.5
+_rf_threshold   = 0.05
 
-LSTM_SEQ_LEN = 24   # must match SEQUENCE_LENGTH in train_lstm.py
+_rf_f1   = 0.0
+_lstm_f1 = 0.0
+
+LSTM_SEQ_LEN = 24
 
 def _load():
-    global _iso_model, _rf_model, _lstm_model, _lstm_scaler, _lstm_threshold
+    global _iso_model, _rf_model, _lstm_model, _lstm_scaler
+    global _lstm_threshold, _rf_threshold, _rf_f1, _lstm_f1
 
     if os.path.exists("app/models/isolation_forest.pkl"):
         _iso_model = joblib.load("app/models/isolation_forest.pkl")
 
     if os.path.exists("app/models/random_forest.pkl"):
         _rf_model = joblib.load("app/models/random_forest.pkl")
+        if os.path.exists("app/models/rf_threshold.pkl"):
+            _rf_threshold = joblib.load("app/models/rf_threshold.pkl")
+        if os.path.exists("app/models/rf_metrics.pkl"):
+            _rf_f1 = joblib.load("app/models/rf_metrics.pkl")["pre_failure_f1"]
 
     if (os.path.exists("app/models/lstm_model.keras") and
             os.path.exists("app/models/lstm_scaler.pkl")):
@@ -26,31 +36,57 @@ def _load():
         _lstm_scaler = joblib.load("app/models/lstm_scaler.pkl")
         if os.path.exists("app/models/lstm_threshold.pkl"):
             _lstm_threshold = joblib.load("app/models/lstm_threshold.pkl")
-        print(f"Loaded LSTM (threshold={_lstm_threshold:.2f})")
+        if os.path.exists("app/models/lstm_metrics.pkl"):
+            _lstm_f1 = joblib.load("app/models/lstm_metrics.pkl")["pre_failure_f1"]
+
+    print(f"Model f1 score — RF: {_rf_f1:.2f} | LSTM: {_lstm_f1:.2f} || Isolation Forest (fallback)")
 
 _load()
 
+
+def _predict_rf(record, recent_records):
+    import pandas as pd
+    from app.ml.train_forest import add_rolling_features, ROLL_WINDOW
+    feature_cols = joblib.load("app/models/rf_feature_cols.pkl")
+    src = recent_records if (recent_records and len(recent_records) >= 2) else [record]
+    rows = [{col: getattr(r, col) for col in FEATURE_COLUMNS} for r in src]
+    df_rolled = add_rolling_features(pd.DataFrame(rows), ROLL_WINDOW)
+    prob = float(_rf_model.predict_proba(df_rolled[feature_cols].iloc[[-1]])[0][1])
+    return {"anomaly": bool(prob >= _rf_threshold), "risk_score": round(prob, 4), "source": "random_forest"}
+
+
+def _predict_lstm(recent_records):
+    import pandas as pd
+    seq_df = pd.DataFrame(
+        [{col: getattr(r, col) for col in FEATURE_COLUMNS}
+         for r in recent_records[-LSTM_SEQ_LEN:]]
+    )
+    seq_input = _lstm_scaler.transform(seq_df).reshape(1, LSTM_SEQ_LEN, len(FEATURE_COLUMNS))
+    prob = float(_lstm_model.predict(seq_input, verbose=0)[0][0])
+    return {"anomaly": bool(prob >= _lstm_threshold), "risk_score": round(prob, 4), "source": "lstm"}
+
+
 def predict(record, recent_records=None):
-    # 1. LSTM first — preferred when we have a full sequence
-    if _lstm_model is not None and recent_records is not None:
-        if len(recent_records) >= LSTM_SEQ_LEN:
-            import pandas as pd
-            seq_df = pd.DataFrame(
-                [{col: getattr(r, col) for col in FEATURE_COLUMNS}
-                 for r in recent_records[-LSTM_SEQ_LEN:]]
-            )
-            seq_scaled = _lstm_scaler.transform(seq_df)
-            seq_input  = seq_scaled.reshape(1, LSTM_SEQ_LEN, len(FEATURE_COLUMNS))
-            prob = float(_lstm_model.predict(seq_input, verbose=0)[0][0])
-            return {"anomaly": bool(prob >= _lstm_threshold), "risk_score": round(prob, 4), "source": "lstm"}
+    lstm_ready = (_lstm_model is not None and
+                  recent_records is not None and
+                  len(recent_records) >= LSTM_SEQ_LEN)
+    rf_ready   = _rf_model is not None
 
-    # 2. Random Forest — fallback when sequence is too short
-    if _rf_model is not None:
-        features = record_to_features(record)
-        prob = _rf_model.predict_proba(features)[0][1]
-        return {"anomaly": bool(prob >= 0.5), "risk_score": round(float(prob), 4), "source": "random_forest"}
+    # Pick whichever supervised model has higher pre-failure recall.
+    # Falls back gracefully if one model is unavailable.
+    if rf_ready and lstm_ready:
+        if _rf_f1 >= _lstm_f1:
+            return _predict_rf(record, recent_records)
+        else:
+            return _predict_lstm(recent_records)
 
-    # 3. Isolation Forest — last resort, no labels needed
+    if rf_ready:
+        return _predict_rf(record, recent_records)
+
+    if lstm_ready:
+        return _predict_lstm(recent_records)
+
+    # Last resort — unsupervised anomaly detection, no labels needed
     if _iso_model is not None:
         features = record_to_features(record)
         raw  = _iso_model.decision_function(features)[0]

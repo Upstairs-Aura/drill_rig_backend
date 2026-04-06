@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import classification_report, f1_score, recall_score
 from app.database import SessionLocal
 from app.models import FeatureRecord, MaintenanceEvent
 from app.ml.features import FEATURE_COLUMNS
@@ -151,6 +151,8 @@ def train():
     print(classification_report(
         y_test, (test_probs >= best_thresh).astype(int),
         target_names=["Normal", "Pre-failure"], zero_division=0))
+    joblib.dump({"pre_failure_f1": float(f1_score(y_test, (test_probs >= best_thresh).astype(int), pos_label=1, zero_division=0))},
+                "app/models/rf_metrics.pkl")
 
     os.makedirs("app/models", exist_ok=True)
     joblib.dump(pipeline,     "app/models/random_forest.pkl")
