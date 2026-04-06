@@ -119,7 +119,7 @@ def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_
     critical_rms = t_hold["vibration_critical_mms"]
     return [
         {
-            "day": r.timestamp.strftime("%b %d"),
+            "ts": r.timestamp.isoformat(),
             "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
         }
         for r in records
@@ -260,6 +260,6 @@ def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
         .all()
     )
     return [
-        {"timestamp": r.timestamp.strftime("%b %d %H:%M"), "risk_score": round(r.risk_score * 100, 1)}
+        {"ts": r.timestamp.isoformat(), "risk_score": round(r.risk_score * 100, 1)}
         for r in reversed(records)
     ]
