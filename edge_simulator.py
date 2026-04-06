@@ -122,7 +122,7 @@ def run():
 
     payload = {"records": records}
     try:
-        resp = requests.post(f"{API_URL}/api/v1/ingest/", json=payload, timeout=10)
+        resp = requests.post(f"{API_URL}/api/v1/ingest/", json=payload, timeout=5)
         resp.raise_for_status()
         print(f"\nIngest response: {resp.json()}")
     except requests.exceptions.ConnectionError:
@@ -144,4 +144,4 @@ def run_times(n: int = 10, interval_seconds: int = 5):
     print(f"\nDone. {n} total posts sent.")
 
 if __name__ == "__main__":
-    run_times(40, interval_seconds=5)
+    run_times(200, interval_seconds=5)
