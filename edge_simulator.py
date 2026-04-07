@@ -14,7 +14,7 @@ from app.config.constants import (
 )
 
 def generate_raw_signal(fault_level: float) -> np.ndarray:
-    """Synthetic vibration signal: base rotation + harmonics + fault impulses + noise."""
+   #Synthetic vibration signal: base rotation + harmonics + fault impulses + noise.
     n_samples = int(SAMPLING_RATE_HZ * BURST_DURATION_S)
     t = np.linspace(0, BURST_DURATION_S, n_samples, endpoint=False)
 
