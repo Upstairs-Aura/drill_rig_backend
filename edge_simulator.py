@@ -38,7 +38,7 @@ def generate_raw_signal(fault_level: float) -> np.ndarray:
 
 
 def apply_butterworth_filter(signal: np.ndarray) -> np.ndarray:
-    """4th-order Butterworth bandpass filter, 10–500 Hz."""
+    #4th-order Butterworth bandpass filter, 10–500 Hz.
     nyquist = SAMPLING_RATE_HZ / 2.0
     low  = LOWCUT_HZ  / nyquist
     high = HIGHCUT_HZ / nyquist
