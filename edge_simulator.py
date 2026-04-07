@@ -25,7 +25,7 @@ def generate_raw_signal(fault_level: float) -> np.ndarray:
             0.2 * np.sin(2 * np.pi * 90 * t)
     )
 
-    # Fault impulses at bearing pass frequency outer race (BPFO ≈ 105 Hz)
+    # Fault impulses at bearing pass frequency outer race (BPFO T 105 Hz)
     bpfo = 105.0
     fault_impulses = fault_level * np.sin(2 * np.pi * bpfo * t) * (
             1 + 0.5 * np.sin(2 * np.pi * 30 * t)
