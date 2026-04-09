@@ -136,7 +136,7 @@ def run_times(n: int = 10, interval_seconds: int = 5):
         # Fault level grows from 0.1 (healthy) to 1.0 (critical) over n runs
         fault_level = 0.1 + (0.9 * i / max(n - 1, 1))
         for asset in ASSETS:
-            asset["fault_level"] = round(fault_level, 3)
+            asset["fault_level"] = 0    #round(fault_level, 3)
         print(f"\n--- Run {i + 1}/{n} | fault_level={fault_level:.3f} ---")
         run()
         if i < n - 1:
