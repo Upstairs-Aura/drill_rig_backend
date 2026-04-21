@@ -18,6 +18,7 @@ LSTM_SEQ_LEN = 24
 def _load():
     global _iso_model, _rf_model, _lstm_model, _lstm_scaler
     global _lstm_threshold, _rf_threshold, _rf_f1, _lstm_f1
+    global _active_model
 
     if os.path.exists("app/models/isolation_forest.pkl"):
         _iso_model = joblib.load("app/models/isolation_forest.pkl")
@@ -40,8 +41,33 @@ def _load():
             _lstm_f1 = joblib.load("app/models/lstm_metrics.pkl")["pre_failure_f1"]
 
     print(f"Model f1 score — RF: {_rf_f1:.2f} | LSTM: {_lstm_f1:.2f} || Isolation Forest (fallback)")
+    _active_model = _select_model()
+    print(f"Active model selected: {_active_model}")
 
 _load()
+
+# ─── Add this function after _load() ───────────────────────────────────────
+
+def _select_model() -> str:
+    rf_ready   = _rf_model is not None
+    lstm_ready = _lstm_model is not None and _lstm_scaler is not None
+
+    if rf_ready and lstm_ready:
+        if _rf_f1 > 0.0 or _lstm_f1 > 0.0:
+            return "random_forest" if _rf_f1 >= _lstm_f1 else "lstm"
+        else:
+            return "lstm"   # both untrained — prefer LSTM (.keras ships in repo)
+
+    if rf_ready:
+        return "random_forest"
+    if lstm_ready:
+        return "lstm"
+    if _iso_model is not None:
+        return "isolation_forest"
+
+    return "none"
+
+_active_model: str = "none"   # set after _load()
 
 
 def _predict_rf(record, recent_records):
@@ -70,24 +96,18 @@ def predict(record, recent_records=None):
     lstm_ready = (_lstm_model is not None and
                   recent_records is not None and
                   len(recent_records) >= LSTM_SEQ_LEN)
-    rf_ready   = _rf_model is not None
 
-    # Pick whichever supervised model has higher pre-failure recall.
-    # Falls back gracefully if one model is unavailable.
-    if rf_ready and lstm_ready:
-        if _rf_f1 >= _lstm_f1:
-            return _predict_rf(record, recent_records)
-        else:
-            return _predict_lstm(recent_records)
-
-    if rf_ready:
+    if _active_model == "random_forest" and _rf_model is not None:
         return _predict_rf(record, recent_records)
 
-    if lstm_ready:
+    if _active_model == "lstm" and lstm_ready:
         return _predict_lstm(recent_records)
 
-    # Last resort — unsupervised anomaly detection, no labels needed
-    if _iso_model is not None:
+    # LSTM was chosen but not enough records yet — fall back to RF
+    if _active_model == "lstm" and _rf_model is not None:
+        return _predict_rf(record, recent_records)
+
+    if _active_model == "isolation_forest" and _iso_model is not None:
         features = record_to_features(record)
         raw  = _iso_model.decision_function(features)[0]
         risk = round(float(1 / (1 + np.exp(raw * 3))), 4)
