@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from app.database import engine, Base
 from app.routes import dashboard, ingest, config, label
+from app.ml import predict as predict_module
 
 Base.metadata.create_all(bind=engine)
 

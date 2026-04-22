@@ -134,7 +134,7 @@ def run_times(n: int = 10, interval_seconds: int = 5):
     import time as time_module
     for i in range(n):
         # Fault level grows from 0.1 (healthy) to 1.0 (critical) over n runs
-        fault_level = 0.1 + (0.9 * i / max(n - 1, 1))
+        fault_level = 0.1 #+ (0.9 * i / max(n - 1, 1))
         for asset in ASSETS:
             asset["fault_level"] = 0    #round(fault_level, 3)
         print(f"\n--- Run {i + 1}/{n} | fault_level={fault_level:.3f} ---")
@@ -144,4 +144,4 @@ def run_times(n: int = 10, interval_seconds: int = 5):
     print(f"\nDone. {n} total posts sent.")
 
 if __name__ == "__main__":
-    run_times(200, interval_seconds=5)
+    run_times(400, interval_seconds=5)
