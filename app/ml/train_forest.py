@@ -127,7 +127,7 @@ def train():
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
         ("model",  RandomForestClassifier(
-            n_estimators=200,
+            n_estimators=250,
             class_weight="balanced",
             random_state=42,
         ))
