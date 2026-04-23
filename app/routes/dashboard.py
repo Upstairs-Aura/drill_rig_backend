@@ -7,7 +7,8 @@ from app.ml.predict import predict as run_predict, LSTM_SEQ_LEN
 
 router = APIRouter(prefix="/api/v1/assets", tags=["Dashboard"])
 
-#Helper for getting configured threshold values
+
+# ── Threshold helper ──────────────────────────────────────────────────────────
 def get_thresholds(asset_id: str, db: Session) -> dict:
     cfg = db.query(AssetConfig).filter(
         AssetConfig.asset_id == asset_id,
@@ -15,16 +16,34 @@ def get_thresholds(asset_id: str, db: Session) -> dict:
     ).first()
     if cfg:
         return cfg.config["thresholds"]
-    # Fallback to hardcoded defaults if no config exists yet
     return {
-        "vibration_warn_mms": 6.0,    "vibration_critical_mms": 9.0,
-        "temperature_warn_c": 70.0,   "temperature_critical_c": 78.0,
-        "current_warn_a":     400.0,  "current_critical_a":     500.0,
+        "vibration_warn_mms":    6.0,  "vibration_critical_mms": 9.0,
+        "temperature_warn_c":   70.0,  "temperature_critical_c": 78.0,
+        "current_warn_a":      400.0,  "current_critical_a":    500.0,
     }
+
+
+# ── Helper: RMS-based health score (fallback when no ML prediction exists) ───
+def _rms_health(rms: float, critical_rms: float) -> float:
+    """Linear approximation used only when no ML prediction is available."""
+    return round((1 - min(rms / critical_rms, 1.0)) * 100, 1)
+
+
+# ── Helper: ML-based health score ────────────────────────────────────────────
+def _ml_health(risk_score: float) -> float:
+    """
+    Converts the ML model's pre-failure risk score (0–1) to a health
+    percentage (0–100).  A risk of 0.0 → 100% healthy; 1.0 → 0% healthy.
+    """
+    return round((1.0 - risk_score) * 100, 1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/")
 def get_all_assets(db: Session = Depends(get_db)):
     return db.query(Asset).all()
+
 
 @router.get("/{asset_id}/metrics/latest")
 def get_latest_metrics(asset_id: str, db: Session = Depends(get_db)):
@@ -57,8 +76,8 @@ def get_latest_metrics(asset_id: str, db: Session = Depends(get_db)):
         "temperature":        round(record.temperature, 1),
         "current":            round(record.current, 1),
         "dominant_frequency": round(record.dominant_frequency, 1),
-        "bpfo_ratio":         round(getattr(record, 'bpfo_ratio', 0.0) or 0.0, 4),
-        "bpfi_ratio":         round(getattr(record, 'bpfi_ratio', 0.0) or 0.0, 4),
+        "bpfo_ratio":         round(getattr(record, "bpfo_ratio", 0.0) or 0.0, 4),
+        "bpfi_ratio":         round(getattr(record, "bpfi_ratio", 0.0) or 0.0, 4),
         "rms":                round(record.rms, 3),
         "peak":               round(record.peak, 3),
         "crest_factor":       round(record.crest_factor, 3),
@@ -66,6 +85,8 @@ def get_latest_metrics(asset_id: str, db: Session = Depends(get_db)):
         "skewness":           round(record.skewness, 3),
         "timestamp":          record.timestamp.isoformat(),
     }
+
+
 @router.get("/{asset_id}/alerts")
 def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     record = db.query(FeatureRecord).filter(
@@ -73,9 +94,9 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     ).order_by(FeatureRecord.timestamp.desc()).first()
     if not record:
         return [
-            {"text": "Vibration",    "severity": "normal"},
-            {"text": "Temperature",  "severity": "normal"},
-            {"text": "Current",      "severity": "normal"},
+            {"text": "Vibration",   "severity": "normal"},
+            {"text": "Temperature", "severity": "normal"},
+            {"text": "Current",     "severity": "normal"},
         ]
     t_hold = get_thresholds(asset_id, db)
 
@@ -89,41 +110,100 @@ def get_alerts(asset_id: str, db: Session = Depends(get_db)):
     return [
         {
             "text": "Vibration",
-            "severity": classify(record.rms, t_hold["vibration_warn_mms"], t_hold["vibration_critical_mms"])
+            "severity": classify(record.rms,
+                                 t_hold["vibration_warn_mms"],
+                                 t_hold["vibration_critical_mms"])
         },
         {
             "text": "Temperature",
-            "severity": classify(record.temperature, t_hold["temperature_warn_c"], t_hold["temperature_critical_c"])
+            "severity": classify(record.temperature,
+                                 t_hold["temperature_warn_c"],
+                                 t_hold["temperature_critical_c"])
         },
         {
             "text": "Current",
-            "severity": classify(record.current, t_hold["current_warn_a"], t_hold["current_critical_a"])
+            "severity": classify(record.current,
+                                 t_hold["current_warn_a"],
+                                 t_hold["current_critical_a"])
         },
     ]
 
 
 @router.get("/{asset_id}/health-history")
 def get_health_history(asset_id: str, days: int = 30, db: Session = Depends(get_db)):
-    # Uses record count rather than date window — works for both NASA (2003-04)
-    # and live data without any source-specific branching.
-    records = (
+    """
+    Returns a time-series of health scores for the chart.
+
+    Strategy (per time point):
+      1. If a PredictionRecord exists within ±5 minutes of a FeatureRecord,
+         use ML-derived health: (1 - risk_score) * 100.
+         This reflects all 10 features the model was trained on.
+      2. Otherwise fall back to RMS-based health so the chart is never empty
+         for historical IMS data that was seeded before predictions were run.
+
+    The 'source' field in each point tells the frontend which method was used,
+    allowing it to render a legend or tooltip if desired.
+    """
+    feature_records = (
         db.query(FeatureRecord)
         .filter(FeatureRecord.asset_id == asset_id)
         .order_by(FeatureRecord.timestamp.desc())
-        .limit(days * 144)
+        .limit(days * 144)          # 144 bursts/day at 10-min intervals
         .all()
     )
-    records = list(reversed(records))  # oldest → newest for chart
+    feature_records = list(reversed(feature_records))   # oldest → newest
 
-    t_hold = get_thresholds(asset_id, db)
+    if not feature_records:
+        return []
+
+    # Load all PredictionRecords for this asset in one query and index by
+    # timestamp so we can do O(1) lookups instead of N queries.
+    prediction_records = (
+        db.query(PredictionRecord)
+        .filter(PredictionRecord.asset_id == asset_id)
+        .order_by(PredictionRecord.timestamp)
+        .all()
+    )
+    # Build a sorted list of (timestamp, risk_score) for bisect lookups
+    pred_times      = [p.timestamp for p in prediction_records]
+    pred_scores     = {p.timestamp: p.risk_score for p in prediction_records}
+
+    t_hold       = get_thresholds(asset_id, db)
     critical_rms = t_hold["vibration_critical_mms"]
-    return [
-        {
-            "ts": r.timestamp.isoformat(),
-            "health": round((1 - min(r.rms / critical_rms, 1.0)) * 100, 1)
-        }
-        for r in records
-    ]
+
+    import bisect
+    from datetime import timedelta
+    MATCH_WINDOW = timedelta(minutes=5)
+
+    result = []
+    for fr in feature_records:
+        # Find the nearest PredictionRecord within ±5 minutes
+        matched_risk = None
+        if pred_times:
+            idx = bisect.bisect_left(pred_times, fr.timestamp)
+            # Check the neighbours on both sides of the insertion point
+            for candidate_idx in [idx - 1, idx]:
+                if 0 <= candidate_idx < len(pred_times):
+                    pt = pred_times[candidate_idx]
+                    if abs(pt - fr.timestamp) <= MATCH_WINDOW:
+                        matched_risk = pred_scores[pt]
+                        break
+
+        if matched_risk is not None:
+            result.append({
+                "ts":     fr.timestamp.isoformat(),
+                "health": _ml_health(matched_risk),
+                "source": "ml",
+            })
+        else:
+            result.append({
+                "ts":     fr.timestamp.isoformat(),
+                "health": _rms_health(fr.rms, critical_rms),
+                "source": "rms_fallback",
+            })
+
+    return result
+
 
 @router.get("/{asset_id}/system-status")
 def get_system_status(asset_id: str, db: Session = Depends(get_db)):
@@ -133,17 +213,17 @@ def get_system_status(asset_id: str, db: Session = Depends(get_db)):
     if not record:
         return {"lastReading": "No data", "lastTransmission": "No data"}
     return {
-        "lastReading": record.timestamp.strftime("%H:%M"),
-        "lastTransmission": record.timestamp.strftime("%H:%M")
+        "lastReading":     record.timestamp.strftime("%H:%M"),
+        "lastTransmission": record.timestamp.strftime("%H:%M"),
     }
+
 
 @router.get("/{asset_id}/predict")
 def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     recent = db.query(FeatureRecord).filter(
         FeatureRecord.asset_id == asset_id,
-        #FeatureRecord.source == "live",  # matches ingest.py which inserts lowercase "live"
-    ).order_by(FeatureRecord.timestamp.desc()).limit(LSTM_SEQ_LEN).all()
-    recent = list(reversed(recent))  # oldest first
+        ).order_by(FeatureRecord.timestamp.desc()).limit(LSTM_SEQ_LEN).all()
+    recent = list(reversed(recent))     # oldest first
 
     if not recent:
         return {"anomaly": False, "risk_score": 0.0, "source": "no_data"}
@@ -164,6 +244,7 @@ def get_prediction(asset_id: str, db: Session = Depends(get_db)):
     db.commit()
     return result
 
+
 @router.get("/{asset_id}/recommendations")
 def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
     record = db.query(FeatureRecord).filter(
@@ -171,7 +252,7 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
     ).order_by(FeatureRecord.timestamp.desc()).first()
 
     if not record:
-        return {"nextMaintenance": "--", "issues": []}
+        return {"nextMaintenance": "--", "issues": [], "systemHealth": None}
 
     t_hold = get_thresholds(asset_id, db)
     issues = []
@@ -181,15 +262,13 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
         issues.append({
             "title": "Critical: Schedule immediate inspection",
             "description": f"Vibration at {round(record.rms, 1)} mm/s exceeds critical limit of {t_hold['vibration_critical_mms']} mm/s.",
-            "buttonText": "Alert",
-            "buttonClass": "alert"
+            "buttonText": "Alert", "buttonClass": "alert"
         })
     elif record.rms >= t_hold["vibration_warn_mms"]:
         issues.append({
             "title": "Warning: Vibration elevated",
             "description": f"Vibration at {round(record.rms, 1)} mm/s exceeds warning limit of {t_hold['vibration_warn_mms']} mm/s.",
-            "buttonText": "Monitor",
-            "buttonClass": "alert"
+            "buttonText": "Monitor", "buttonClass": "alert"
         })
 
     # Temperature checks
@@ -197,15 +276,13 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
         issues.append({
             "title": "Critical: Overheating detected",
             "description": f"Temperature at {round(record.temperature, 1)}°C exceeds critical limit of {t_hold['temperature_critical_c']}°C.",
-            "buttonText": "Alert",
-            "buttonClass": "alert"
+            "buttonText": "Alert", "buttonClass": "alert"
         })
     elif record.temperature >= t_hold["temperature_warn_c"]:
         issues.append({
             "title": "Warning: Temperature elevated",
             "description": f"Temperature at {round(record.temperature, 1)}°C exceeds warning limit of {t_hold['temperature_warn_c']}°C.",
-            "buttonText": "Monitor",
-            "buttonClass": "alert"
+            "buttonText": "Monitor", "buttonClass": "alert"
         })
 
     # Current checks
@@ -213,31 +290,38 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
         issues.append({
             "title": "Critical: Current overload",
             "description": f"Current at {round(record.current, 1)} A exceeds critical limit of {t_hold['current_critical_a']} A.",
-            "buttonText": "Alert",
-            "buttonClass": "alert"
+            "buttonText": "Alert", "buttonClass": "alert"
         })
     elif record.current >= t_hold["current_warn_a"]:
         issues.append({
             "title": "Warning: Current elevated",
             "description": f"Current at {round(record.current, 1)} A exceeds warning limit of {t_hold['current_warn_a']} A.",
-            "buttonText": "Monitor",
-            "buttonClass": "alert"
+            "buttonText": "Monitor", "buttonClass": "alert"
         })
 
     if not issues:
         issues.append({
             "title": "All systems nominal",
             "description": "No threshold violations detected. Next routine inspection as scheduled.",
-            "buttonText": "Review",
-            "buttonClass": "review"
+            "buttonText": "Review", "buttonClass": "review"
         })
 
-    # nextMaintenance: scale urgency by how close rms is to the critical threshold
+    # ── Risk score and derived metrics ───────────────────────────────────────
     latest_prediction = db.query(PredictionRecord).filter(
         PredictionRecord.asset_id == asset_id
     ).order_by(PredictionRecord.timestamp.desc()).first()
 
-    risk = latest_prediction.risk_score if latest_prediction else 0.0
+    if latest_prediction is not None:
+        risk          = latest_prediction.risk_score
+        system_health = _ml_health(risk)
+        health_source = "ml"
+    else:
+        # No prediction has been run yet — fall back to RMS-based health
+        # so the panel always shows a meaningful number.
+        critical_rms  = t_hold["vibration_critical_mms"]
+        system_health = _rms_health(record.rms, critical_rms)
+        risk          = 1.0 - (system_health / 100.0)
+        health_source = "rms_fallback"
 
     if risk >= 0.80:
         next_maintenance = "Immediate"
@@ -248,7 +332,13 @@ def get_recommendations(asset_id: str, db: Session = Depends(get_db)):
     else:
         next_maintenance = "30+ days"
 
-    return {"nextMaintenance": next_maintenance, "issues": issues}
+    return {
+        "nextMaintenance": next_maintenance,
+        "systemHealth":    system_health,
+        "healthSource":    health_source,   # "ml" or "rms_fallback"
+        "issues":          issues,
+    }
+
 
 @router.get("/{asset_id}/prediction-history")
 def get_prediction_history(asset_id: str, db: Session = Depends(get_db)):
